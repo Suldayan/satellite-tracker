@@ -1,6 +1,8 @@
-use wasm_bindgen::prelude::*;
+mod api;
+mod coords;
+mod error;
+mod propagate;
+pub mod types;
 
-#[wasm_bindgen]
-pub fn get_satellite_status(name: &str) -> String {
-    format!("Satellite {} is being tracked in Rust!", name)
-}
+pub use api::{predict_look_angles, find_passes};
+pub use types::{AzEl, Observer, ScanOptions};
