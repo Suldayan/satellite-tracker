@@ -31,14 +31,22 @@ dependencies = [
 ]
 
 [[package]]
-name = "engine"
-version = "0.1.0"
+name = "console_error_panic_hook"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a06aeb73f470f66dcdbf7223caeebb85984942f22f1adb2a088cf9668146bbbc"
 dependencies = [
- "serde",
- "serde-wasm-bindgen",
- "sgp4",
+ "cfg-if",
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "engine"
+version = "0.1.0"
+
+[[package]]
+name = "ingestion"
+version = "0.1.0"
 
 [[package]]
 name = "itoa"
@@ -76,6 +84,21 @@ name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
+
+[[package]]
+name = "orchestrator"
+version = "0.1.0"
+
+[[package]]
+name = "predictor"
+version = "0.1.0"
+dependencies = [
+ "console_error_panic_hook",
+ "serde",
+ "serde-wasm-bindgen",
+ "sgp4",
+ "wasm-bindgen",
+]
 
 [[package]]
 name = "proc-macro2"
