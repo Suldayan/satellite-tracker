@@ -1,5 +1,8 @@
 use predictor::{Observer, ScanOptions, passes};
 
+const TLE1: &str = "1 25544U 98067A   26119.49027628  .00007115  00000+0  13705-3 0  9999";
+const TLE2: &str = "2 25544  51.6319 181.1364 0007113   4.2135 355.8912 15.49020533564200";
+
 #[test]
 fn iss_produces_passes_over_surrey() {
     let (tle1, tle2) = orchestrator::get_tle()
