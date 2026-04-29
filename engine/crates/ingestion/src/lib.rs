@@ -161,7 +161,7 @@ fn ndvi_to_geotiff(ndvi: &[f32], w: u32, h: u32, path: &str) -> anyhow::Result<(
     Ok(())
 }
 
-fn calc_difference_map(
+pub fn calc_difference_map(
     past: &[f32],
     present: &[f32],
 ) -> anyhow::Result<DifferenceMap> {

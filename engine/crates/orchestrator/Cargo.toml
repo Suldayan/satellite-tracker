@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+predictor  = { path = "../predictor" }
+ingestion  = { path = "../ingestion" }
 reqwest = {version = "0.13.3", features = ["blocking"]}
 tokio = {version = "1.52.1", features = ["full"]}
 chrono = "0.4.44"
