@@ -12,7 +12,7 @@ fn main() {
     while let Ok(event) = rx.recv() {
         println!("Pass received: {} at {}", event.satellite_id, event.pass_start);
         std::thread::spawn(move || {
-            ingestion::handle_pass(event);
+            ingestion::bands::handle_pass(event);
         });
     }
 }
