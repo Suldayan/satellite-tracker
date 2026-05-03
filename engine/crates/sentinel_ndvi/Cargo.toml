@@ -1,0 +1,15 @@
+[package]
+name = "sentinel_ndvi"
+version = "0.1.0"
+edition = "2024"
+description = "NDVI computation and GeoTIFF output for Sentinel-2 rasters"
+license = "MIT"
+ 
+[dependencies]
+sentinel_cog = { path = "../sentinel_cog" }
+image = "0.24"
+tiff = "0.9"
+serde = { version = "1", features = ["derive"] }
+thiserror = "1"
+log = "0.4"
+ 

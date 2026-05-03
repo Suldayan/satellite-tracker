@@ -1,0 +1,10 @@
+[package]
+name = "sentinel_types"
+version = "0.1.0"
+edition = "2024"
+description = "Shared event type that orchestrator and pipeline crates use"
+license = "MIT"
+ 
+[dependencies]
+chrono = { version = "0.4", features = ["serde"] }
+ 

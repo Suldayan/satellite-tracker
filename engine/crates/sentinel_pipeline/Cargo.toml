@@ -1,0 +1,16 @@
+[package]
+name    = "sentinel_pipeline"
+version = "0.1.0"
+edition = "2024"
+ 
+[dependencies]
+sentinel_cog  = { path = "../sentinel_cog" }
+sentinel_ndvi = { path = "../sentinel_ndvi" }
+sentinel_orchestrator = { path = "../sentinel_orchestrator" }
+sentinel_types = { path = "../sentinel_types" }
+reqwest = { version = "0.12", features = ["blocking", "json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "1"
+log = "0.4"

@@ -3,12 +3,15 @@ name = "engine"
 version = "0.1.0"
 edition = "2024"
 
-
 [workspace]
 members = [
-    "crates/predictor",
-    "crates/ingestion",
-    "crates/orchestrator",
+    "crates/satellite_predictor",
+    "crates/sentinel_cog",
+    "crates/sentinel_ndvi",
+    "crates/sentinel_orchestrator",
+    "crates/sentinel_pipeline",
+    "crates/sentinel_runner",
+    "crates/sentinel_types",
 ]
-resolver = "2"
 
+resolver = "2"
