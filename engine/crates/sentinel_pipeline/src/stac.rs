@@ -2,12 +2,10 @@ use serde::{Deserialize, Serialize};
 use log::{debug, warn};
 use crate::error::{PipelineError, PipelineResult};
 
-const SIGN_URL:  &str = "https://planetarycomputer.microsoft.com/api/sas/v1/sign";
-const STAC_URL:  &str = "https://planetarycomputer.microsoft.com/api/stac/v1/search";
-pub(crate) const DATE_FMT:  &str = "%Y-%m-%dT%H:%M:%SZ";
+const SIGN_URL: &str = "https://planetarycomputer.microsoft.com/api/sas/v1/sign";
+const STAC_URL: &str = "https://planetarycomputer.microsoft.com/api/stac/v1/search";
+pub(crate) const DATE_FMT: &str = "%Y-%m-%dT%H:%M:%SZ";
 const MAX_RETRY: u32  = 3;
-
-// ── STAC response types ───────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct StacResponse {
@@ -37,32 +35,32 @@ struct SignedResponse {
     pub href: String,
 }
 
-/// Signed band URLs for a single Sentinel-2 scene.
 pub struct SceneUrls {
     pub b04: String,
     pub b08: String,
 }
-
-// ── Public API ────────────────────────────────────────────────────────────────
 
 /// Query the Planetary Computer STAC API for a Sentinel-2 scene covering
 /// the given bounding box and time window, then sign the asset URLs.
 ///
 /// Returns `None` when no scene is available (e.g. cloud cover or timing).
 pub fn fetch_scene_urls(
-    client:     &reqwest::blocking::Client,
-    min_lon:    f64,
-    min_lat:    f64,
-    max_lon:    f64,
-    max_lat:    f64,
+    client: &reqwest::blocking::Client,
+    min_lon: f64,
+    min_lat: f64,
+    max_lon: f64,
+    max_lat: f64,
     start_time: &str,
-    end_time:   &str,
+    end_time: &str,
 ) -> PipelineResult<Option<SceneUrls>> {
     let body = serde_json::json!({
         "collections": ["sentinel-2-l2a"],
-        "bbox":        [min_lon, min_lat, max_lon, max_lat],
-        "datetime":    format!("{start_time}/{end_time}"),
-        "limit":       1,
+        "bbox": [min_lon, min_lat, max_lon, max_lat],
+        "datetime": format!("{start_time}/{end_time}"),
+        "query": { 
+            "eo:cloud_cover": { "lt": 80 } 
+        },
+        "limit": 1,
     });
 
     debug!("POSTing STAC query for bbox=[{min_lon},{min_lat},{max_lon},{max_lat}]");
@@ -82,11 +80,9 @@ pub fn fetch_scene_urls(
     }))
 }
 
-// ── Internal helpers ──────────────────────────────────────────────────────────
-
 fn post_with_retry(
     client: &reqwest::blocking::Client,
-    body:   &serde_json::Value,
+    body: &serde_json::Value,
 ) -> PipelineResult<String> {
     for attempt in 1..=MAX_RETRY {
         let resp = client.post(STAC_URL).json(body).send()

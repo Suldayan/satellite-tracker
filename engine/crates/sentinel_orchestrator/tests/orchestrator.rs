@@ -1,7 +1,4 @@
-use sentinel_orchestrator::{BBox, OrchestratorConfig, OrchestratorError};
-use satellite_predictor::Observer;
-
-// ── BBox ─────────────────────────────────────────────────────────────────────
+use sentinel_orchestrator::{BBox, OrchestratorError};
 
 #[test]
 fn surrey_bc_bbox_is_in_correct_quadrant() {
@@ -12,8 +9,6 @@ fn surrey_bc_bbox_is_in_correct_quadrant() {
     assert!(bbox.max_lat > bbox.min_lat, "max_lat should exceed min_lat");
     assert!(bbox.max_lon > bbox.min_lon, "max_lon should exceed min_lon");
 }
-
-// ── ms_to_datetime ────────────────────────────────────────────────────────────
 
 #[test]
 fn ms_to_datetime_unix_epoch() {
@@ -29,8 +24,6 @@ fn ms_to_datetime_known_timestamp() {
     let dt = ms_to_datetime(1_775_757_600_000.0);
     assert_eq!(dt.format("%Y-%m-%dT%H:%M:%SZ").to_string(), "2026-04-09T18:00:00Z");
 }
-
-// ── TLE fetch (network required) ──────────────────────────────────────────────
 
 /// Verify Celestrak returns a valid 3-line TLE for Sentinel-2A.
 /// Run with `cargo test -- --ignored`.

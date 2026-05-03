@@ -4,17 +4,17 @@ use sentinel_pipeline::{ingest_pass};
 use sentinel_types::SatellitePassEvent;
 use sentinel_pipeline::stac::fetch_scene_urls;
 
-const T1: &str = "2025-06-15T10:00:00Z";
-const T2: &str = "2026-02-15T12:00:00Z";
+const T1: &str = "2026-04-09T18:00:00Z";
+const T2: &str = "2026-04-09T20:00:00Z";
 
 fn surrey_event() -> SatellitePassEvent {
     SatellitePassEvent {
         satellite_id: "SENTINEL-2A".into(),
-        pass_start:   T1.parse::<DateTime<chrono::Utc>>().unwrap(),
-        pass_end:     T2.parse::<DateTime<chrono::Utc>>().unwrap(),
+        pass_start: T1.parse::<DateTime<chrono::Utc>>().unwrap(),
+        pass_end: T2.parse::<DateTime<chrono::Utc>>().unwrap(),
         max_elevation_deg: 0.0,
         min_lon: -122.95, max_lon: -122.65,
-        min_lat:   49.05, max_lat:  49.35,
+        min_lat: 49.05, max_lat:  49.35,
     }
 }
 
