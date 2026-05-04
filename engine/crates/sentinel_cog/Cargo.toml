@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+sentinel_types = {path = "../sentinel_types"}
 reqwest = { version = "0.12", features = ["blocking", "gzip"] }
 bytes = "1"
 image = { version = "0.25", features = ["tiff"] }

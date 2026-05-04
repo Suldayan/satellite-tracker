@@ -4,7 +4,6 @@ use crate::error::{CogError, CogResult};
 use crate::fetch::fetch_range;
 use crate::parse::IfdInfo;
 
-/// Raw raster of `u16` pixel values with width and height.
 #[derive(Debug, Clone)]
 pub struct Raster {
     pub pixels: Vec<u16>,
@@ -15,8 +14,8 @@ pub struct Raster {
 /// Fetch every tile referenced by `info` and return the raw compressed bytes.
 pub fn fetch_tiles(
     client: &reqwest::blocking::Client,
-    url:    &str,
-    info:   &IfdInfo,
+    url: &str,
+    info: &IfdInfo,
 ) -> CogResult<Vec<Bytes>> {
     info.tile_offsets
         .iter()
@@ -29,7 +28,6 @@ pub fn fetch_tiles(
 }
 
 /// Decompress Zlib-encoded tiles and stitch them into a single [`Raster`].
-///
 /// `le` must match the TIFF file's byte order (from [`crate::parse::is_little_endian`]).
 pub fn decode_tiles(tiles: Vec<Bytes>, info: &IfdInfo, le: bool) -> CogResult<Raster> {
     use flate2::read::ZlibDecoder;
@@ -48,14 +46,14 @@ pub fn decode_tiles(tiles: Vec<Bytes>, info: &IfdInfo, le: bool) -> CogResult<Ra
             .chunks_exact(2)
             .map(|c| {
                 if le { u16::from_le_bytes([c[0], c[1]]) }
-                else  { u16::from_be_bytes([c[0], c[1]]) }
+                else { u16::from_be_bytes([c[0], c[1]]) }
             })
             .collect();
 
         let tile_col = (i as u32) % tiles_across;
         let tile_row = (i as u32) / tiles_across;
-        let x_start  = tile_col * tile_w;
-        let y_start  = tile_row * tile_h;
+        let x_start = tile_col * tile_w;
+        let y_start = tile_row * tile_h;
 
         for ty in 0..tile_h {
             let y = y_start + ty;

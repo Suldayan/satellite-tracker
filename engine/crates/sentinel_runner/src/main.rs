@@ -1,9 +1,9 @@
 use std::sync::mpsc;
 use std::thread;
 use satellite_predictor::Observer;
-use sentinel_orchestrator::{BBox, OrchestratorConfig, predict_loop};
+use sentinel_orchestrator::{OrchestratorConfig, predict_loop};
 use sentinel_pipeline::handle_pass;
-use sentinel_types::SatellitePassEvent;
+use sentinel_types::{SatellitePassEvent, BBox};
 
 fn main() {
     // Set RUST_LOG=info to see pipeline output

@@ -1,4 +1,5 @@
-use sentinel_orchestrator::{BBox, OrchestratorError};
+use sentinel_orchestrator::OrchestratorError;
+use sentinel_types::BBox;
 
 #[test]
 fn surrey_bc_bbox_is_in_correct_quadrant() {

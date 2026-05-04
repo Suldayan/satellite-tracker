@@ -1829,6 +1829,7 @@ dependencies = [
  "image 0.25.10",
  "log",
  "reqwest",
+ "sentinel_types",
  "thiserror 1.0.69",
 ]
 
