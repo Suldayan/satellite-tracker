@@ -1,7 +1,7 @@
 use std::time::Duration;
 use log::{info, error};
 use sentinel_ndvi::{compute_ndvi, write_f32_tiff, GeoRef};
-use sentinel_types::SatellitePassEvent;
+use sentinel_types::{SatellitePassEvent, BBox};
 use crate::error::{PipelineError, PipelineResult};
 use crate::stac::fetch_scene_urls;
 
@@ -29,22 +29,36 @@ pub fn ingest_pass(event: &SatellitePassEvent) -> PipelineResult<Option<String>>
         return Ok(None);
     };
 
-    let b04 = sentinel_cog::fetch_overview(&client, &urls.b04, 3)?;
-    let b08 = sentinel_cog::fetch_overview(&client, &urls.b08, 3)?;
+    let bbox = BBox {
+        min_lon: event.min_lon,
+        max_lon: event.max_lon,
+        min_lat: event.min_lat,
+        max_lat: event.max_lat,
+    };
+
+    let b04 = sentinel_cog::fetch_overview_bbox(&client, &urls.b04, 1, &bbox)?;
+    let b08 = sentinel_cog::fetch_overview_bbox(&client, &urls.b08, 1, &bbox)?;
 
     info!("Bands fetched: {}×{}", b04.width, b04.height);
 
     let (ndvi, w, h) = compute_ndvi(&b04, &b08)?;
 
-    let path = format!(
+    let out_dir = std::path::Path::new("output/ndvi");
+    std::fs::create_dir_all(out_dir)
+        .map_err(PipelineError::Io)?;
+
+    let filename = format!(
         "ndvi_{}.tif",
         chrono::Utc::now().format("%Y-%m-%dT%H-%M-%SZ")
     );
 
-    write_f32_tiff(&ndvi, w, h, &path, &GeoRef::utm10n_10m())?;
-    info!("Saved {path}");
+    let path = out_dir.join(filename);
+    let path_str = path.to_string_lossy().to_string();
 
-    Ok(Some(path))
+    write_f32_tiff(&ndvi, w, h, &path_str, &GeoRef::utm10n_10m())?;
+    info!("Saved {path_str}");
+
+    Ok(Some(path_str))
 }
 
 /// Block until 6 hours after pass end, then run [`ingest_pass`].
@@ -62,7 +76,7 @@ pub fn handle_pass(event: SatellitePassEvent) {
 
     match ingest_pass(&event) {
         Ok(Some(path)) => info!("Ingestion complete: {path}"),
-        Ok(None)       => info!("No imagery available, skipping"),
-        Err(e)         => error!("Ingestion failed for {}: {e}", event.satellite_id),
+        Ok(None) => info!("No imagery available, skipping"),
+        Err(e) => error!("Ingestion failed for {}: {e}", event.satellite_id),
     }
 }
