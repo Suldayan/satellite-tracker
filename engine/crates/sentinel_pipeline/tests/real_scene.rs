@@ -4,8 +4,8 @@ use sentinel_pipeline::{ingest_pass};
 use sentinel_types::SatellitePassEvent;
 use sentinel_pipeline::stac::fetch_scene_urls;
 
-const T1: &str = "2026-04-09T18:00:00Z";
-const T2: &str = "2026-04-09T20:00:00Z";
+const T1: &str = "2020-07-10T00:00:00Z";
+const T2: &str = "2026-03-10T23:59:59Z";
 
 fn surrey_event() -> SatellitePassEvent {
     SatellitePassEvent {

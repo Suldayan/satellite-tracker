@@ -11,11 +11,11 @@
 //!
 //! let client = reqwest::blocking::Client::new();
 //!
-//! // All tiles at overview level 3 (~300m resolution)
+//! // All tiles at overview level 3 (~300 m resolution, ~500 KB)
 //! let raster = fetch_overview(&client, "https://…/B04.tif", 3)?;
 //!
-//! // Only tiles intersecting Surrey at full resolution
-//! let bbox = BBox { min_lon: -122.95, max_lon: -122.65, min_lat: 49.05, max_lat: 49.35 };
+//! // Only tiles intersecting Surrey at full 10 m resolution
+//! let bbox = BBox::surrey_bc();
 //! let raster = fetch_overview_bbox(&client, "https://…/B04.tif", 0, &bbox)?;
 //! # Ok::<(), CogError>(())
 //! ```
@@ -23,43 +23,62 @@
 mod decode;
 mod error;
 mod fetch;
-pub mod parse;
 mod geo;
+pub mod parse;
 
 pub use decode::Raster;
 pub use error::{CogError, CogResult};
 pub use parse::{IfdInfo, GeoTransform, is_little_endian, parse_subifds, parse_ifd_bytes};
-use geo::{filter_tiles};
 
 use sentinel_types::BBox;
 
+/// Fetch all tiles at the given overview level.
 pub fn fetch_overview(
     client: &reqwest::blocking::Client,
     url: &str,
     overview_level: usize,
 ) -> CogResult<Raster> {
-    let (info, le) = fetch_ifd(client, url, overview_level)?;
-    let tiles = decode::fetch_tiles(client, url, &info)?;
+    let (info, le) = resolve_ifd(client, url, overview_level)?;
+    let tile_refs: Vec<(usize, u64, u64)> = info.tile_offsets
+        .iter()
+        .enumerate()
+        .map(|(i, &(off, len))| (i, off, len))
+        .collect();
+    let tiles = decode::fetch_tiles(client, url, &tile_refs)?;
     decode::decode_tiles(tiles, &info, le)
 }
 
-/// Fetch only the tiles intersecting `bbox`, at the given overview level.
+/// Fetch only the tiles intersecting `bbox` at the given overview level.
 ///
-/// Requires the TIFF to have embedded georeferencing (tags 33550 + 33922).
-/// Falls back to fetching all tiles if the tags are absent.
+/// Requires embedded georeferencing tags (33550 + 33922) in the TIFF.
+/// Falls back to fetching all tiles when those tags are absent.
 pub fn fetch_overview_bbox(
     client: &reqwest::blocking::Client,
     url: &str,
     overview_level: usize,
     bbox: &BBox,
 ) -> CogResult<Raster> {
-    let (mut info, le) = fetch_ifd(client, url, overview_level)?;
-    info.tile_offsets = geo::filter_tiles(&info, bbox);
-    let tiles = decode::fetch_tiles(client, url, &info)?;
-    decode::decode_tiles(tiles, &info, le)
+    let (info, le) = resolve_ifd(client, url, overview_level)?;
+    let tile_refs = geo::filter_tiles(&info, bbox);
+
+    if tile_refs.is_empty() {
+        return Err(CogError::InvalidHeader("No tiles intersect the given bbox".into()));
+    }
+
+    // Compute the pixel bounds of the filtered tile set
+    let min_col = tile_refs.iter().map(|(i, _, _)| (*i as u32) % info.tiles_across).min().unwrap();
+    let max_col = tile_refs.iter().map(|(i, _, _)| (*i as u32) % info.tiles_across).max().unwrap();
+    let min_row = tile_refs.iter().map(|(i, _, _)| (*i as u32) / info.tiles_across).min().unwrap();
+    let max_row = tile_refs.iter().map(|(i, _, _)| (*i as u32) / info.tiles_across).max().unwrap();
+
+    let out_w = ((max_col - min_col + 1) * info.tile_w).min(info.img_w);
+    let out_h = ((max_row - min_row + 1) * info.tile_h).min(info.img_h);
+
+    let tiles = decode::fetch_tiles(client, url, &tile_refs)?;
+    decode::decode_tiles_region(tiles, &info, le, min_col, min_row, out_w, out_h)
 }
 
-fn fetch_ifd(
+fn resolve_ifd(
     client: &reqwest::blocking::Client,
     url: &str,
     overview_level: usize,

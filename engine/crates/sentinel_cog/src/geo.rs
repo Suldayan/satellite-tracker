@@ -1,19 +1,7 @@
 use sentinel_types::BBox;
 use crate::parse::{GeoTransform, IfdInfo};
 
-const TYPE_DOUBLE: u16 = 12;
-
-pub fn read_f64(data: &[u8], off: usize, le: bool) -> Option<f64> {
-    let s = data.get(off..off + 8)?;
-    Some(if le {
-        f64::from_le_bytes(s.try_into().unwrap())
-    } else {
-        f64::from_be_bytes(s.try_into().unwrap())
-    })
-}
-
 /// Convert WGS84 lat/lon degrees to UTM Zone 10N easting/northing (metres).
-/// Uses the standard Transverse Mercator projection formula.
 fn latlon_to_utm10n(lat_deg: f64, lon_deg: f64) -> (f64, f64) {
     const A: f64 = 6_378_137.0;
     const F: f64 = 1.0 / 298.257_223_563;
@@ -25,15 +13,14 @@ fn latlon_to_utm10n(lat_deg: f64, lon_deg: f64) -> (f64, f64) {
     let lat = lat_deg.to_radians();
     let lon = lon_deg.to_radians();
     let lon0 = CENTRAL_MERIDIAN.to_radians();
-
-    let n = A / (1.0 - E2 * lat.sin().powi(2)).sqrt();
-    let t = lat.tan().powi(2);
-    let c = E2 / (1.0 - E2) * lat.cos().powi(2);
-    let a_coef = (lon - lon0) * lat.cos();
-
     let e2 = E2;
     let e4 = e2 * e2;
     let e6 = e4 * e2;
+
+    let n = A / (1.0 - e2 * lat.sin().powi(2)).sqrt();
+    let t = lat.tan().powi(2);
+    let c = e2 / (1.0 - e2) * lat.cos().powi(2);
+    let a_coef = (lon - lon0) * lat.cos();
 
     let m = A * (
         (1.0 - e2 / 4.0 - 3.0 * e4 / 64.0 - 5.0 * e6 / 256.0) * lat
@@ -59,20 +46,23 @@ fn latlon_to_utm10n(lat_deg: f64, lon_deg: f64) -> (f64, f64) {
     (easting, northing)
 }
 
-/// Return only the tile offsets from `info` whose pixel extents intersect `bbox`.
+/// Return `(original_tile_index, offset, byte_count)` for every tile that
+/// intersects `bbox`. The original index is preserved so `decode_tiles` can
+/// place each tile at the correct position in the output raster.
 ///
-/// Requires `info.geo` to be populated — call this after parsing an IFD that
-/// contains tags 33550 (PixelScale) and 33922 (ModelTiepoint).
-pub fn filter_tiles(info: &IfdInfo, bbox: &BBox) -> Vec<(u64, u64)> {
+/// Falls back to all tiles when `info.geo` is absent.
+pub fn filter_tiles(info: &IfdInfo, bbox: &BBox) -> Vec<(usize, u64, u64)> {
     let geo = match &info.geo {
         Some(g) => g,
-        None => return info.tile_offsets.clone(),
+        None => return info.tile_offsets
+            .iter()
+            .enumerate()
+            .map(|(i, &(off, len))| (i, off, len))
+            .collect(),
     };
 
     let (utm_min_x, utm_min_y) = latlon_to_utm10n(bbox.min_lat, bbox.min_lon);
     let (utm_max_x, utm_max_y) = latlon_to_utm10n(bbox.max_lat, bbox.max_lon);
-
-    let tiles_down = (info.img_h + info.tile_h - 1) / info.tile_h;
 
     info.tile_offsets
         .iter()
@@ -83,18 +73,14 @@ pub fn filter_tiles(info: &IfdInfo, bbox: &BBox) -> Vec<(u64, u64)> {
 
             let tile_min_x = geo.origin_x + (tile_col * info.tile_w) as f64 * geo.pixel_x;
             let tile_max_x = tile_min_x + info.tile_w as f64 * geo.pixel_x;
-
-            // pixel_y is negative (north-up), so min_y is the bottom of the tile
             let tile_max_y = geo.origin_y + (tile_row * info.tile_h) as f64 * geo.pixel_y;
             let tile_min_y = tile_max_y + info.tile_h as f64 * geo.pixel_y;
-
-            let _ = tiles_down;
 
             tile_max_x > utm_min_x
                 && tile_min_x < utm_max_x
                 && tile_max_y > utm_min_y
                 && tile_min_y < utm_max_y
         })
-        .map(|(_, &offsets)| offsets)
+        .map(|(i, &(off, len))| (i, off, len))
         .collect()
 }
