@@ -2,8 +2,10 @@
 name = "sentinel_types"
 version = "0.1.0"
 edition = "2024"
-description = "Shared event type that orchestrator and pipeline crates use"
+description = "Shared structs across ndvi related crates"
+repository = "https://github.com/your-username/satellite-tracker"
 license = "MIT"
+readme = "README.md"
  
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
