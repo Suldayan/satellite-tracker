@@ -69,7 +69,8 @@ pub fn handle_pass(event: SatellitePassEvent, overview_level: u8) {
 
 fn create_ndvi_output_dir() -> PipelineResult<(String, String)> {
     let timestamp = Utc::now().format("%Y-%m-%dT%H-%M-%SZ").to_string();
-    let base = std::env::var("OUTPUT_DIR").unwrap_or_else(|_| "output/ndvi".into());
+    let base = std::env::var("OUTPUT_DIR")
+        .unwrap_or_else(|_| format!("{}/../../output/ndvi", env!("CARGO_MANIFEST_DIR")));
     let out_dir = format!("{}/{}/", base, timestamp);
 
     fs::create_dir_all(&out_dir)?;
