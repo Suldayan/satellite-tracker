@@ -3,7 +3,7 @@ use std::thread;
 use std::time::Duration;
 use log::{info, warn, error};
 use crate::config::OrchestratorConfig;
-use sentinel_types::SatellitePassEvent;
+use sentinel_types::Event;
 use crate::tle::fetch_tle;
 use crate::predict::predict_passes;
 
@@ -12,7 +12,7 @@ use crate::predict::predict_passes;
 /// Refreshes the TLE and re-scans every `config.tle_refresh_hours`. Retries
 /// on TLE fetch failure with a 60-second backoff rather than giving up.
 /// Returns when the receiver is dropped (channel closed).
-pub fn predict_loop(tx: mpsc::Sender<SatellitePassEvent>, config: OrchestratorConfig) {
+pub fn predict_loop(tx: mpsc::Sender<Event>, config: OrchestratorConfig) {
     loop {
         let tle = loop {
             match fetch_tle(config.norad_id) {
@@ -29,8 +29,8 @@ pub fn predict_loop(tx: mpsc::Sender<SatellitePassEvent>, config: OrchestratorCo
         match predict_passes(&tle, &config) {
             Ok(events) => {
                 info!("{} pass(es) predicted", events.len());
-                for event in events {
-                    if tx.send(event).is_err() {
+                for pass in events {
+                    if tx.send(Event::SatellitePass(pass)).is_err() {
                         info!("Receiver dropped — shutting down predict_loop");
                         return;
                     }
@@ -40,7 +40,7 @@ pub fn predict_loop(tx: mpsc::Sender<SatellitePassEvent>, config: OrchestratorCo
         }
 
         thread::sleep(Duration::from_secs_f64(
-            config.tle_refresh_hours * 3_600.0,
+            config.tle_refresh_hours * 3600.0,
         ));
     }
 }

@@ -48,7 +48,7 @@ pub fn ingest_pass(event: &SatellitePassEvent, overview_level: u8) -> PipelineRe
     Ok(Some(tiff_path))
 }
 
-pub fn handle_pass(event: SatellitePassEvent, overview_level: u8) {
+pub fn handle_pass(tx: mpsc::Sender<Event>, event: SatellitePassEvent, overview_level: u8) {
     let ready_at = event.pass_end + chrono::Duration::hours(6);
     let wait = (ready_at - Utc::now())
         .to_std()
@@ -60,11 +60,15 @@ pub fn handle_pass(event: SatellitePassEvent, overview_level: u8) {
     );
     std::thread::sleep(wait);
 
-    match ingest_pass(&event, overview_level) {
+    let result: PipelineResult<Option<String>> = ingest_pass(&event, overview_level);
+
+    match &result {
         Ok(Some(path)) => info!("Ingestion complete: {path}"),
         Ok(None) => info!("No imagery available, skipping"),
         Err(e) => error!("Ingestion failed for {}: {e}", event.satellite_id),
     }
+
+    tx.send(Event::PipelineFinished(result)).ok();
 }
 
 fn create_ndvi_output_dir() -> PipelineResult<(String, String)> {

@@ -7,13 +7,13 @@
 //! geography (observer position, bbox). It has no knowledge of band fetching,
 //! NDVI, or Azure.
 
-mod error;
+pub mod error;
 pub mod config;
 mod tle;
 pub mod predict;
 mod runner;
 
-pub use error::{OrchestratorError, OrchestratorResult};
+pub use error::{OrchestratorError, OrchestratorResult, PipelineError, PipelineResult};
 
 pub use config::{OrchestratorConfig};
 pub use tle::fetch_tle;
