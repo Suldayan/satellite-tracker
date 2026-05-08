@@ -3,8 +3,8 @@ use std::fs;
 use chrono::Utc;
 use log::{info, error};
 use sentinel_ndvi::{compute_ndvi, write_f32_tiff, GeoRef};
-use sentinel_types::{SatellitePassEvent, BBox};
-use crate::error::{PipelineError, PipelineResult};
+use sentinel_types::{SatellitePassEvent, BBox, PipelineResult};
+use crate::error::PipelineError;
 use crate::stac::fetch_scene_urls;
 
 /// Fetch bands, compute NDVI, and write a Float32 GeoTIFF.

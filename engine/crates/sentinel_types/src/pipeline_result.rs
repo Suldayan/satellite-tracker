@@ -1,0 +1,1 @@
+pub type PipelineResult<T> = Result<T, String>;

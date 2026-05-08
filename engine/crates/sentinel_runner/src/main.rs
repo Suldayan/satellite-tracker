@@ -3,8 +3,8 @@ use std::thread;
 
 use satellite_predictor::Observer;
 use sentinel_orchestrator::{OrchestratorConfig, predict_loop};
-use sentinel_pipeline::{handle_pass, PipelineResult};
-use sentinel_types::{SatellitePassEvent, BBox};
+use sentinel_pipeline::handle_pass;
+use sentinel_types::{SatellitePassEvent, BBox, PipelineResult};
 use sentinel_events::Event;
 
 const OVERVIEW_LEVEL: u8 = 1;

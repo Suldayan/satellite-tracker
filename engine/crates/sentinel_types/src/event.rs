@@ -1,4 +1,4 @@
-use sentinel_orchestrator::PipelineResult;
+use crate::pipeline_result::PipelineResult;
 
 /// A confirmed satellite pass enriched with pipeline metadata.
 ///
@@ -22,5 +22,5 @@ pub struct SatellitePassEvent {
 #[derive(Debug)]
 pub enum Event {
     SatellitePass(SatellitePassEvent),
-    PipelineFinished(PipelineResult<Option<String>>),
+    PipelineFinished(Result<Option<PipelineResult>, String>),
 }

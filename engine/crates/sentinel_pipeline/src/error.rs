@@ -24,4 +24,3 @@ pub enum PipelineError {
     InvalidBBox(String),
 }
 
-pub type PipelineResult<T> = Result<T, PipelineError>;
