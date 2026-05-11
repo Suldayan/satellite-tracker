@@ -3,9 +3,10 @@ use std::fs;
 use chrono::Utc;
 use log::{info, error};
 use sentinel_ndvi::{compute_ndvi, write_f32_tiff, GeoRef};
-use sentinel_types::{SatellitePassEvent, BBox, NdviRecord};
-use crate::error::PipelineError;
+use sentinel_types::{SatellitePassEvent, BBox, NdviRecord, Event};
+use crate::error::{PipelineError, PipelineResult};
 use crate::stac::fetch_scene_urls;
+use std::sync::mpsc;
 
 /// Fetch bands, compute NDVI, and write a Float32 GeoTIFF.
 ///
@@ -40,12 +41,28 @@ pub fn ingest_pass(event: &SatellitePassEvent, overview_level: u8) -> PipelineRe
 
     let (ndvi, w, h) = compute_ndvi(&b04, &b08)?;
 
+    let stats = sentinel_ndvi::compute_stats(&ndvi)
+        .ok_or(PipelineError::InvalidBBox("No valid pixels in output".into()))?;
+
     let (_, tiff_path) = create_ndvi_output_dir()?;
+        write_f32_tiff(&ndvi, w, h, &tiff_path, &GeoRef::utm10n_10m())?;
 
     write_f32_tiff(&ndvi, w, h, &tiff_path, &GeoRef::utm10n_10m())?;
     info!("Saved {tiff_path}");
 
-    Ok(Some(tiff_path))
+    Ok(Some(NdviRecord {
+        captured_at: Utc::now(),
+        satellite_id: event.satellite_id.clone(),
+        min_lon: event.min_lon,
+        max_lon: event.max_lon,
+        min_lat: event.min_lat,
+        max_lat: event.max_lat,
+        mean_ndvi: stats.mean_ndvi,
+        max_ndvi: stats.max_ndvi,
+        min_ndvi: stats.min_ndvi,
+        valid_pixels: stats.valid_pixels,
+        tif_path: tiff_path,
+    }))
 }
 
 pub fn handle_pass(tx: mpsc::Sender<Event>, event: SatellitePassEvent, overview_level: u8) {
@@ -64,7 +81,7 @@ pub fn handle_pass(tx: mpsc::Sender<Event>, event: SatellitePassEvent, overview_
         .map_err(|e| e.to_string());
 
     match &result {
-        Ok(Some(path)) => info!("Ingestion complete: {path}"),
+        Ok(Some(record)) => info!("Ingestion complete: {}", record.tif_path),
         Ok(None) => info!("No imagery available, skipping"),
         Err(e) => error!("Ingestion failed for {}: {e}", event.satellite_id),
     }

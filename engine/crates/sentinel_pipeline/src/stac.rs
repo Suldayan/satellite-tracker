@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use log::{debug, warn};
-use crate::error::PipelineError;
-use sentinel_types::PipelineResult;
+use crate::error::{PipelineError, PipelineResult};
 
 const SIGN_URL: &str = "https://planetarycomputer.microsoft.com/api/sas/v1/sign";
 const STAC_URL: &str = "https://planetarycomputer.microsoft.com/api/stac/v1/search";

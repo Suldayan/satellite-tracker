@@ -1,6 +1,14 @@
 use sentinel_cog::Raster;
 use crate::error::{NdviError, NdviResult};
 
+#[derive(Debug, Clone)]
+pub struct NdviStats {
+    pub mean_ndvi: f32,
+    pub max_ndvi: f32,
+    pub min_ndvi: f32,
+    pub valid_pixels: usize,
+}
+
 pub fn compute_ndvi(b04: &Raster, b08: &Raster) -> NdviResult<(Vec<f32>, u32, u32)> {
     if b04.width != b08.width || b04.height != b08.height {
         return Err(NdviError::DimensionMismatch {
@@ -31,4 +39,26 @@ pub fn compute_ndvi_raw(b04: &[u16], b08: &[u16]) -> Vec<f32> {
             if denom == 0.0 { 0.0 } else { (n - r) / denom }
         })
         .collect()
+}
+
+/// Compute summary statistics from an NDVI slice, skipping NAN pixels.
+///
+/// Returns `None` if there are no valid pixels at all.
+pub fn compute_stats(ndvi: &[f32]) -> Option<NdviStats> {
+    let valid: Vec<f32> = ndvi.iter().copied().filter(|v| !v.is_nan()).collect();
+
+    if valid.is_empty() {
+        return None;
+    }
+
+    let mean = valid.iter().sum::<f32>() / valid.len() as f32;
+    let max = valid.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+    let min = valid.iter().cloned().fold(f32::INFINITY, f32::min);
+
+    Some(NdviStats {
+        mean_ndvi: mean,
+        max_ndvi: max,
+        min_ndvi: min,
+        valid_pixels: valid.len(),
+    })
 }

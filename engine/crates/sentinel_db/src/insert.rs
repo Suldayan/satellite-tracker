@@ -18,10 +18,7 @@ pub fn insert_ndvi_result(result: &PipelineResult) -> DbResult<()> {
     for attempt in 1..=MAX_ATTEMPTS {
         match try_insert(result) {
             Ok(()) => {
-                info!(
-                    "Inserted NDVI record for {} at {}",
-                    result.satellite_id, result.captured_at
-                );
+                info!("Inserted NDVI record for {} at {}", result.satellite_id, result.captured_at);
                 return Ok(());
             }
             Err(e) => {
@@ -34,33 +31,19 @@ pub fn insert_ndvi_result(result: &PipelineResult) -> DbResult<()> {
         }
     }
 
-    Err(DbError::InsertFailed {
-        attempts: MAX_ATTEMPTS,
-        source: last_err.unwrap(),
-    })
+    Err(last_err.unwrap())
 }
 
-fn try_insert(result: &PipelineResult) -> Result<(), postgres::Error> {
-    let mut client = connect().map_err(|e| match e {
-        crate::error::DbError::Connection(inner) => inner,
-        other => panic!("Unexpected error: {other}"),
-    })?;
+fn try_insert(result: &PipelineResult) -> DbResult<()> {
+    let mut client = connect()?;
 
     client.execute(
         r#"
         INSERT INTO ndvi_history (
-            captured_at,
-            satellite_id,
-            min_lon,
-            max_lon,
-            min_lat,
-            max_lat,
-            mean_ndvi,
-            max_ndvi,
-            min_ndvi,
-            valid_pixels,
-            tif_path,
-            bbox
+            captured_at, satellite_id,
+            min_lon, max_lon, min_lat, max_lat,
+            mean_ndvi, max_ndvi, min_ndvi,
+            valid_pixels, tif_path, bbox
         ) VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
             ST_MakeEnvelope($3, $5, $4, $6, 4326)
@@ -79,7 +62,7 @@ fn try_insert(result: &PipelineResult) -> Result<(), postgres::Error> {
             &(result.valid_pixels as i32),
             &result.tif_path,
         ],
-    )?;
+    ).map_err(DbError::Connection)?;
 
     Ok(())
 }

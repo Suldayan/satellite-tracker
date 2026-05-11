@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub struct NdviRecord {
     pub captured_at: chrono::DateTime<chrono::Utc>,
     pub satellite_id: String,

@@ -10,6 +10,6 @@ mod error;
 pub mod stac;
 pub mod pass;
 
-pub use error::PipelineError;
+pub use error::{PipelineError, PipelineResult};
 pub use pass::{ingest_pass, handle_pass};
 pub use stac::SceneUrls;

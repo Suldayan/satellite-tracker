@@ -13,7 +13,7 @@ mod tle;
 pub mod predict;
 mod runner;
 
-pub use error::{OrchestratorError, OrchestratorResult, PipelineError, PipelineResult};
+pub use error::{OrchestratorError, OrchestratorResult};
 
 pub use config::{OrchestratorConfig, load_config};
 pub use tle::fetch_tle;
