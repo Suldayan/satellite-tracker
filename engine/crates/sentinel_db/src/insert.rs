@@ -1,18 +1,18 @@
 use std::thread;
 use std::time::Duration;
-use log::{info, warn, error};
-use sentinel_types::PipelineResult;
+use log::{info, warn};
+use sentinel_types::NdviRecord;
 use crate::connection::connect;
 use crate::error::{DbError, DbResult};
 
 const MAX_ATTEMPTS: u32 = 3;
 const RETRY_DELAY: Duration = Duration::from_secs(5);
 
-/// Insert a [`PipelineResult`] into `ndvi_history`.
+/// Insert a [`PipelineResult`] into `ndvi_history`.65
 ///
 /// Retries up to [`MAX_ATTEMPTS`] times with a [`RETRY_DELAY`] backoff
 /// before returning [`DbError::InsertFailed`].
-pub fn insert_ndvi_result(result: &PipelineResult) -> DbResult<()> {
+pub fn insert_ndvi_result(result: &NdviRecord) -> DbResult<()> {
     let mut last_err = None;
 
     for attempt in 1..=MAX_ATTEMPTS {
@@ -34,7 +34,7 @@ pub fn insert_ndvi_result(result: &PipelineResult) -> DbResult<()> {
     Err(last_err.unwrap())
 }
 
-fn try_insert(result: &PipelineResult) -> DbResult<()> {
+fn try_insert(result: &NdviRecord) -> DbResult<()> {
     let mut client = connect()?;
 
     client.execute(

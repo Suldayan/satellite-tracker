@@ -20,7 +20,7 @@ impl BBox {
 
 #[cfg(test)]
 mod tests {
-    user super::*;
+    use super::*;
     
     #[test]
     fn surrey_bc_bbox_is_in_correct_quadrant() {

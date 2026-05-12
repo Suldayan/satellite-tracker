@@ -1,36 +1,25 @@
 use std::sync::mpsc;
 use std::thread;
-
-use dotenvy::dotenv;
-use satellite_predictor::Observer;
-use sentinel_orchestrator::{OrchestratorConfig, load_config, predict_loop};
-use sentinel_pipeline::handle_pass;
-use sentinel_events::Event;
-use crate::config::load_overview_level;
+use sentinel_orchestrator::{load_config, predict_loop};
+use sentinel_pipeline::pass::handle_pass;
+use sentinel_types::{SatellitePassEvent, Event};
 
 fn main() {
     env_logger::init();
 
     let config = load_config();
-    let overview_level = load_overview_level();
+    let overview_level = config.overview_level;
 
-    let (tx, rx) = mpsc::channel::<Event>();
+    let (pass_tx, pass_rx) = mpsc::channel::<SatellitePassEvent>();
 
-    let tx_orch = tx.clone();
-    thread::spawn(move || predict_loop(tx_orch, config));
+    let (event_tx, event_rx) = mpsc::channel::<Event>();
 
-    sentinel_pipeline::set_sender(tx.clone());
+    sentinel_db::listen(event_rx);
 
-    for event in rx {
-        match event {
-            Event::SatellitePass(pass) => {
-                let lvl = overview_level;
-                thread::spawn(move || handle_pass(pass, overview_level));
-            }
+    thread::spawn(move || predict_loop(pass_tx, config));
 
-            Event::PipelineFinished(result) => {
-                println!("Pipeline finished: {:?}", result);
-            }
-        }
+    for pass in pass_rx {
+        let tx = event_tx.clone();
+        thread::spawn(move || handle_pass(tx, pass, overview_level));
     }
 }

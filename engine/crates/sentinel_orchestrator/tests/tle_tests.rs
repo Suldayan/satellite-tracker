@@ -1,5 +1,4 @@
 use sentinel_orchestrator::OrchestratorError;
-use sentinel_types::BBox;
 
 /// Verify Celestrak returns a valid 3-line TLE for Sentinel-2A.
 /// Run with `cargo test -- --ignored`.

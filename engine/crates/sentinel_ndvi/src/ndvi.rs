@@ -65,6 +65,7 @@ pub fn compute_stats(ndvi: &[f32]) -> Option<NdviStats> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
 
     #[test]
     fn stats_returns_none_for_all_nan() {

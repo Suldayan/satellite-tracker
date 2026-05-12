@@ -56,13 +56,15 @@ fn stac_returns_urls_for_known_surrey_scene() {
 #[test]
 #[ignore]
 fn ingest_pass_produces_ndvi_geotiff_for_surrey() {
-    let path = ingest_pass(&surrey_event(), 3)
+    let record = ingest_pass(&surrey_event(), 3)
         .expect("Ingestion failed")
-        .expect("No imagery available for known-good date — catalogue may have changed");
+        .expect("No imagery available for known-good date");
 
     assert!(
-        std::path::Path::new(&path).exists(),
-        "GeoTIFF not found at {path}"
+        std::path::Path::new(&record.tif_path).exists(),
+        "GeoTIFF not found at {:?}", record.tif_path
     );
-    println!("Output: {path}");
+    println!("Output: {}", record.tif_path);
+    println!("Mean NDVI: {:.3}", record.mean_ndvi);
+    println!("Valid pixels: {}", record.valid_pixels);
 }

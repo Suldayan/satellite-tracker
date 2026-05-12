@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 sentinel_types = { path = "../sentinel_types", version = "0.1.0" }
-postgres = "0.19.13"
+postgres = { version = "0.19.13", features = ["with-chrono-0_4"] }
 thiserror = "1"
 log = "0.4"
 dotenvy = "0.15.7"

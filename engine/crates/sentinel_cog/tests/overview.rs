@@ -1,4 +1,4 @@
-use sentinel_cog::{CogError};
+use sentinel_cog::fetch_overview;
 
 /// Fetch a real Sentinel-2 overview and verify its dimensions are plausible.
 /// Run with `cargo test -- --ignored`.
@@ -15,7 +15,7 @@ fn fetch_real_sentinel2_overview() {
         .build()
         .unwrap();
 
-    let raster = sentinel_cog::fetch_overview(&client, &url, 3).unwrap();
+    let raster = fetch_overview(&client, &url, 3).unwrap();
 
     // Level 3 overview of a 10980x10980 tile should be roughly 1372x1372
     assert!(raster.width > 100, "Width {} seems too small", raster.width);
