@@ -5,12 +5,10 @@ edition = "2024"
 
 [workspace]
 members = [
-    "crates/satellite_predictor",
     "crates/sentinel_cog",
     "crates/sentinel_ndvi",
-    "crates/sentinel_orchestrator",
     "crates/sentinel_pipeline",
-    "crates/sentinel_runner",
+    "crates/sentinel_azure",
     "crates/sentinel_types",
 ]
 

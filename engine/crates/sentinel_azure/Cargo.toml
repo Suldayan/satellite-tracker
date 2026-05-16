@@ -8,11 +8,10 @@ name = "sentinel_runner"
 path = "src/main.rs"
  
 [dependencies]
-sentinel_orchestrator = { path = "../sentinel_orchestrator" }
 sentinel_pipeline = { path = "../sentinel_pipeline" }
-satellite_predictor = { path = "../satellite_predictor" }
 sentinel_db = { path = "../sentinel_db" }
 sentinel_types = { path = "../sentinel_types" }
+
 env_logger = "0.11"
 log = "0.4"
 dotenvy = "0.15.7"
