@@ -1,14 +1,9 @@
-[package]
-name = "engine"
-version = "0.1.0"
-edition = "2024"
-
 [workspace]
 members = [
     "crates/sentinel_cog",
     "crates/sentinel_ndvi",
     "crates/sentinel_pipeline",
-    "crates/sentinel_azure",
+    "crates/sentinel_orchestrator",
     "crates/sentinel_types",
 ]
 

@@ -21,17 +21,13 @@ fn make_record() -> NdviRecord {
     }
 }
 
-fn start_postgis() -> impl std::any::Any {
-    Postgres::default()
+#[test]
+fn test_ndvi_database_workflow() {
+    let container = Postgres::default()
         .with_name("postgis/postgis")
         .with_tag("15-3.3")
         .start()
-        .expect("PostGIS container failed to start — is Docker running?")
-}
-
-#[test]
-fn test_ndvi_database_workflow() {
-    let container = start_postgis();
+        .expect("PostGIS container failed to start — is Docker running?");
 
     let port = container.get_host_port_ipv4(5432).unwrap();
     let conn_str = format!(
