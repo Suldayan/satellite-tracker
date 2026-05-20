@@ -1,29 +1,26 @@
-use image::RgbImage;
-use std::path::Path;
+use std::fs::File;
+use tiff::encoder::{colortype::Gray32Float, compression::Deflate, TiffEncoder};
 use crate::error::{NdviError, NdviResult};
 
 /// Georeferencing parameters written to the `.tfw` world file.
 ///
-/// All values are in the coordinate system defined by the accompanying `.prj`.
+/// All values must be in the coordinate system defined by `prj_wkt`.
 pub struct GeoRef {
-    /// Pixel width in map units (positive east).
     pub pixel_size_x: f64,
-    /// Pixel height in map units (negative = north-up).
+    /// Negative — rows step southward (top-left origin convention).
     pub pixel_size_y: f64,
-    /// X coordinate of the centre of the top-left pixel.
     pub origin_x: f64,
-    /// Y coordinate of the centre of the top-left pixel.
     pub origin_y: f64,
-    /// Well-Known Text CRS string written to the `.prj` sidecar.
     pub prj_wkt: &'static str,
 }
 
 impl GeoRef {
-    /// UTM Zone 10N (EPSG:32610) at 10 m resolution — the native CRS for
-    /// Sentinel-2 tiles covering Surrey, BC.
+    /// UTM Zone 10N (EPSG:32610) at 10 m/pixel — Sentinel-2's native CRS for Surrey, BC.
+    ///
+    /// Origin is the top-left corner of the standard 100 km tile grid, not a pixel centre.
     pub fn utm10n_10m() -> Self {
         Self {
-            pixel_size_x:  10.0,
+            pixel_size_x: 10.0,
             pixel_size_y: -10.0,
             origin_x: 499_980.0,
             origin_y: 5_500_020.0,
@@ -32,100 +29,45 @@ impl GeoRef {
     }
 }
 
-/// Write an RGB-coloured NDVI GeoTIFF plus `.tfw` / `.prj` sidecar files.
+/// Write a single-band Float32 GeoTIFF with Deflate compression.
 ///
-/// The colour ramp runs:
-/// - deep blue  → water / shadow  (NDVI < −0.1)
-/// - brown/tan  → bare soil       (NDVI ≈ 0)
-/// - yellow     → sparse veg      (NDVI ≈ 0.1)
-/// - lime green → moderate veg    (NDVI ≈ 0.4)
-/// - dark green → dense canopy    (NDVI → 1.0)
-///
-/// For full floating-point NDVI output use [`write_f32_tiff`] instead and
-/// apply a colour ramp in QGIS.
-///
-/// # Errors
-///
-/// Returns [`NdviError`] on buffer size mismatch or I/O failure.
-pub fn write_rgb_geotiff(
+/// Invalid/masked pixels are stored as `NaN`. In QGIS, load with
+/// *Singleband pseudocolor* → *RdYlGn* ramp → 2–98% percentile stretch.
+pub fn write_f32_tiff(
     ndvi: &[f32],
     width: u32,
     height: u32,
     path: &str,
     georef: &GeoRef,
 ) -> NdviResult<()> {
-    let pixels: Vec<u8> = ndvi.iter()
-        .flat_map(|&v| ndvi_to_rgb(v))
-        .collect();
-
-    let expected = (width * height * 3) as usize;
-    let img = RgbImage::from_raw(width, height, pixels)
-        .ok_or(NdviError::BufferMismatch { expected, actual: (width * height) as usize })?;
-
-    img.save_with_format(Path::new(path), image::ImageFormat::Tiff)?;
-    write_sidecars(path, georef)?;
-    Ok(())
-}
-
-/// Write a single-band Float32 TIFF containing raw NDVI values.
-///
-/// Load this in QGIS with *Singleband pseudocolor* + *RdYlGn* ramp and a
-/// 2–98 % percentile stretch for best results.
-pub fn write_f32_tiff(
-    ndvi:   &[f32],
-    width:  u32,
-    height: u32,
-    path:   &str,
-    georef: &GeoRef,
-) -> NdviResult<()> {
-    use std::fs::File;
-    use tiff::encoder::{TiffEncoder, colortype::Gray32Float};
-
     let file = File::create(path)?;
-    let mut enc = TiffEncoder::new(file)
-        .map_err(|e| NdviError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
-    enc.write_image::<Gray32Float>(width, height, ndvi)
-        .map_err(|e| NdviError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+    let mut enc = TiffEncoder::new(file).map_err(tiff_err)?;
 
-    write_sidecars(path, georef)?;
-    Ok(())
+    // `write_image` has no compression parameter — use `new_image_with_compression`
+    // explicitly, otherwise the tiff crate defaults to uncompressed output.
+    let img = enc
+        .new_image_with_compression::<Gray32Float, _>(width, height, Deflate::default())
+        .map_err(tiff_err)?;
+
+    img.write_data(ndvi).map_err(tiff_err)?;
+
+    write_sidecars(path, georef)
 }
 
 fn write_sidecars(tif_path: &str, georef: &GeoRef) -> NdviResult<()> {
     let tfw = format!(
         "{}\n0.0\n0.0\n{}\n{}\n{}\n",
-        georef.pixel_size_x, georef.pixel_size_y,
-        georef.origin_x, georef.origin_y,
+        georef.pixel_size_x, georef.pixel_size_y, georef.origin_x, georef.origin_y,
     );
     std::fs::write(tif_path.replace(".tif", ".tfw"), tfw)?;
     std::fs::write(tif_path.replace(".tif", ".prj"), georef.prj_wkt)?;
     Ok(())
 }
 
-/// Map an NDVI value in `[−1, 1]` to an RGB triple using a 5-stop colour ramp.
-fn ndvi_to_rgb(v: f32) -> [u8; 3] {
-    #[rustfmt::skip]
-    const RAMP: [(f32, u8, u8, u8); 5] = [
-        (-1.0, 0, 0, 128),  // deep blue  – water / shadow
-        (-0.1, 80, 60, 10),  // dark brown – bare soil
-        ( 0.1, 200, 200, 30),  // yellow     – sparse / dry veg
-        ( 0.4, 60, 180, 20),  // lime green – moderate vegetation
-        ( 1.0, 0, 80, 0),  // dark green – dense canopy
-    ];
-
-    let v = v.clamp(-1.0, 1.0);
-    for w in RAMP.windows(2) {
-        let (v0, r0, g0, b0) = w[0];
-        let (v1, r1, g1, b1) = w[1];
-        if v <= v1 {
-            let t = (v - v0) / (v1 - v0);
-            return [lerp(r0, r1, t), lerp(g0, g1, t), lerp(b0, b1, t)];
-        }
-    }
-    [0, 80, 0]
-}
-
-#[inline]
-fn lerp(a: u8, b: u8, t: f32) -> u8 {
-    (a as f32 + (b as f32 - a as f32) * t).round() as u8
+/// Wrap a `tiff` crate error into [`NdviError::Io`].
+///
+/// The `tiff` crate uses its own error type, so this keeps error handling
+/// uniform without pulling tiff's error type into the public API.
+fn tiff_err(e: impl std::fmt::Display) -> NdviError {
+    NdviError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
 }

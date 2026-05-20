@@ -44,7 +44,7 @@ pub fn ingest_pass(event: &SatellitePassEvent, overview_level: u8) -> PipelineRe
     let stats = sentinel_ndvi::compute_stats(&ndvi)
         .ok_or(PipelineError::InvalidBBox("No valid pixels in output".into()))?;
 
-    let (_, tiff_path) = create_ndvi_output_dir()?;
+    let (_, tiff_path) = create_ndvi_output_dir(overview_level)?;
         write_f32_tiff(&ndvi, w, h, &tiff_path, &GeoRef::utm10n_10m())?;
 
     write_f32_tiff(&ndvi, w, h, &tiff_path, &GeoRef::utm10n_10m())?;
@@ -89,16 +89,18 @@ pub fn handle_pass(tx: mpsc::Sender<Event>, event: SatellitePassEvent, overview_
     tx.send(Event::PipelineFinished(result)).ok();
 }
 
-fn create_ndvi_output_dir() -> PipelineResult<(String, String)> {
+fn create_ndvi_output_dir(overview_level: u8) -> PipelineResult<(String, String)> {
     let timestamp = Utc::now().format("%Y-%m-%dT%H-%M-%SZ").to_string();
+    
     let base = std::env::var("OUTPUT_DIR")
-        .unwrap_or_else(|_| format!("{}/../../output/ndvi", env!("CARGO_MANIFEST_DIR")));
-    let out_dir = format!("{}/{}/", base, timestamp);
+        .unwrap_or_else(|_| format!("{}/../../output", env!("CARGO_MANIFEST_DIR")));
+    
+    let out_dir = format!("{}/overview_{}/{}", base, overview_level, timestamp);
 
     fs::create_dir_all(&out_dir)?;
 
     let tiff_filename = format!("ndvi_{}.tif", timestamp);
-    let tiff_path = format!("{}{}", out_dir, tiff_filename);
+    let tiff_path = format!("{}/{}", out_dir, tiff_filename);
 
     Ok((out_dir, tiff_path))
 }

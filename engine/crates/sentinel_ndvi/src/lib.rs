@@ -26,4 +26,4 @@ mod geotiff;
 pub use error::{NdviError, NdviResult};
 pub use ndvi::{compute_ndvi, compute_ndvi_raw, compute_stats, NdviStats};
 pub use analysis::{calc_difference_map, DifferenceMap};
-pub use geotiff::{write_rgb_geotiff, write_f32_tiff, GeoRef};
+pub use geotiff::{write_f32_tiff, GeoRef};

@@ -85,7 +85,7 @@ fn resolve_ifd(
 ) -> CogResult<(IfdInfo, bool)> {
     let header = fetch::fetch_header(client, url)?;
     let le = is_little_endian(&header)?;
-    let subifd_offsets = parse_subifds(&header)?;
+    let subifd_offsets = parse_subifds(client, url, &header)?;
 
     let ifd_offset = subifd_offsets
         .get(overview_level)

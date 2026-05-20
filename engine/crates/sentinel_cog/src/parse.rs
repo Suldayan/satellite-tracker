@@ -184,7 +184,11 @@ fn read_f64_values(
     (0..count).map(|j| read_f64(&ext, j * 8, le)).collect()
 }
 
-pub fn parse_subifds(header: &[u8]) -> CogResult<Vec<u32>> {
+pub fn parse_subifds(
+    client: &reqwest::blocking::Client,
+    url: &str,
+    header: &[u8],
+) -> CogResult<Vec<u32>> {
     let le = is_little_endian(header)?;
     let ifd_offset = read_u32(header, 4, le)? as usize;
     let entry_count = read_u16(header, ifd_offset, le)? as usize;
@@ -198,13 +202,13 @@ pub fn parse_subifds(header: &[u8]) -> CogResult<Vec<u32>> {
 
         if tag != TAG_SUB_IFDS { continue; }
 
-        let sz = type_size(type_id, tag)?;
-        let offsets = read_inline_values(header, entry, type_id, count, le)?
+        debug!("Found {count} SubIFD(s) at tag 330 (type={type_id})");
+
+        let offsets = read_ext_values(client, url, header, entry, type_id, tag, count, le)?
             .into_iter()
             .map(|v| v as u32)
             .collect();
 
-        debug!("Found {count} SubIFD(s) at tag 330 (type={type_id}, sz={sz})");
         return Ok(offsets);
     }
 
@@ -332,8 +336,6 @@ mod tests {
     use super::*;
     use crate::error::CogError;
 
-    // ── is_little_endian ────────────────────────────────────────────────────
-
     #[test]
     fn little_endian_marker_detected() {
         assert_eq!(is_little_endian(b"II\x2A\x00").unwrap(), true);
@@ -355,8 +357,6 @@ mod tests {
         let err = is_little_endian(b"").unwrap_err();
         assert!(matches!(err, CogError::InvalidHeader(_)));
     }
-
-    // ── type_size ───────────────────────────────────────────────────────────
 
     #[test]
     fn type_size_short_is_2() {
@@ -384,8 +384,6 @@ mod tests {
         assert!(matches!(err, CogError::UnsupportedTagType { tag: TAG_IMAGE_WIDTH, type_id: 99 }));
     }
 
-    // ── read_u16 ────────────────────────────────────────────────────────────
-
     #[test]
     fn read_u16_little_endian() {
         assert_eq!(read_u16(&[0x01, 0x02], 0, true).unwrap(), 0x0201);
@@ -407,8 +405,6 @@ mod tests {
         assert!(matches!(err, CogError::OutOfBounds { .. }));
     }
 
-    // ── read_u32 ────────────────────────────────────────────────────────────
-
     #[test]
     fn read_u32_little_endian() {
         assert_eq!(read_u32(&[0x01, 0x02, 0x03, 0x04], 0, true).unwrap(), 0x04030201);
@@ -424,8 +420,6 @@ mod tests {
         let err = read_u32(&[0x01, 0x02], 0, true).unwrap_err();
         assert!(matches!(err, CogError::OutOfBounds { .. }));
     }
-
-    // ── read_u64 ────────────────────────────────────────────────────────────
 
     #[test]
     fn read_u64_little_endian() {
@@ -445,8 +439,6 @@ mod tests {
         assert!(matches!(err, CogError::OutOfBounds { .. }));
     }
 
-    // ── read_f64 ────────────────────────────────────────────────────────────
-
     #[test]
     fn read_f64_little_endian_known_value() {
         // 1.0f64 in little-endian IEEE 754
@@ -465,8 +457,6 @@ mod tests {
         let err = read_f64(&[0x00; 4], 0, true).unwrap_err();
         assert!(matches!(err, CogError::OutOfBounds { .. }));
     }
-
-    // ── read_typed ──────────────────────────────────────────────────────────
 
     #[test]
     fn read_typed_short() {
@@ -531,8 +521,6 @@ mod tests {
         assert_eq!(vals, vec![1337]);
     }
 
-    // ── TiffTag round-trip ──────────────────────────────────────────────────
-
     #[test]
     fn tiff_tag_known_tags_round_trip() {
         let known = [
@@ -552,8 +540,6 @@ mod tests {
         assert_eq!(tag, TiffTag::Unknown(9999));
         assert_eq!(tag.as_raw(), 9999);
     }
-
-    // ── tag_name ────────────────────────────────────────────────────────────
 
     #[test]
     fn tag_name_known_tags() {
