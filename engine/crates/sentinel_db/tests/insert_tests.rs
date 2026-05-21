@@ -22,7 +22,7 @@ fn make_record() -> NdviRecord {
 }
 
 #[test]
-fn test_ndvi_database_workflow() {
+fn test_insert_ndvi_result() {
     let container = Postgres::default()
         .with_name("postgis/postgis")
         .with_tag("15-3.3")
@@ -60,17 +60,16 @@ fn test_ndvi_database_workflow() {
         CREATE INDEX ndvi_history_time_idx ON ndvi_history (captured_at);
     ").expect("Schema migration failed");
 
-    unsafe {
-        std::env::set_var("DATABASE_URL", &conn_str);
-    }
-    
     let record = make_record();
-    let result = sentinel_db::insert_ndvi_result(&record);
 
-    assert!(result.is_ok(), "Insert failed: {:?}", result.err());
+    sentinel_db::insert_ndvi_result(&record, &conn_str)
+        .expect("Insert failed");
 
     let row = client
-        .query_one("SELECT mean_ndvi, max_ndvi, min_ndvi, valid_pixels, satellite_id FROM ndvi_history", &[])
+        .query_one(
+            "SELECT mean_ndvi, max_ndvi, min_ndvi, valid_pixels, satellite_id FROM ndvi_history",
+            &[],
+        )
         .expect("Query failed");
 
     let mean: f32 = row.get(0);
@@ -91,9 +90,10 @@ fn test_ndvi_database_workflow() {
     let wkt: String = bbox_row.get(0);
     assert!(wkt.contains("POLYGON"), "Expected a polygon bbox, got: {wkt}");
 
-    unsafe {
-        std::env::set_var("DATABASE_URL", "host=localhost port=1 user=nobody dbname=nobody");
-    }
-    let bad_result = sentinel_db::insert_ndvi_result(&record);
+    // Verify a bad URL produces a connection error rather than silently succeeding.
+    let bad_result = sentinel_db::insert_ndvi_result(
+        &record,
+        "host=localhost port=1 user=nobody dbname=nobody",
+    );
     assert!(bad_result.is_err(), "Expected error on bad connection");
 }

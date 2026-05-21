@@ -1,10 +1,16 @@
 use chrono::Utc;
 use sentinel_types::SatellitePassEvent;
 use crate::config::AzureConfig;
+use std::sync::mpsc;
 
+/// Entry point for production — reads config from environment.
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let config = AzureConfig::from_env();
+    run_with(AzureConfig::from_env())
+}
 
+/// Runs the pipeline with an explicit config — used directly in tests
+/// to avoid env var mutation.
+pub fn run_with(config: AzureConfig) -> Result<(), Box<dyn std::error::Error>> {
     let event = SatellitePassEvent {
         satellite_id: config.satellite_id,
         pass_start: Utc::now() - chrono::Duration::days(config.lookback_days),
@@ -16,13 +22,12 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         max_lat: config.max_lat,
     };
 
-    match sentinel_pipeline::ingest_pass(&event, config.overview_level) {
-        Ok(Some(record)) => {
+    match sentinel_pipeline::ingest_pass(&event, config.overview_level)? {
+        Some(record) => {
             log::info!("Pipeline complete — mean NDVI: {:.3}", record.mean_ndvi);
-            sentinel_db::insert_ndvi_result(&record)?;
+            sentinel_db::insert_ndvi_result(&record, &config.database_url)?;
         }
-        Ok(None) => log::info!("No imagery available"),
-        Err(e)   => return Err(Box::new(e)),
+        None => log::info!("No imagery available for this pass"),
     }
 
     Ok(())

@@ -8,6 +8,19 @@ use crate::error::{PipelineError, PipelineResult};
 use crate::stac::fetch_scene_urls;
 use std::sync::mpsc;
 
+pub fn handle_pass(tx: mpsc::Sender<Event>, event: SatellitePassEvent, overview_level: u8) {
+    let result = ingest_pass(&event, overview_level)
+        .map_err(|e| e.to_string());
+
+    match &result {
+        Ok(Some(record)) => info!("Ingestion complete: {}", record.tif_path),
+        Ok(None) => info!("No imagery available, skipping"),
+        Err(e) => error!("Ingestion failed for {}: {e}", event.satellite_id),
+    }
+
+    tx.send(Event::PipelineFinished(result)).ok();
+}
+
 /// Fetch bands, compute NDVI, and write a Float32 GeoTIFF.
 ///
 /// Returns the output path on success, or `Ok(None)` when no imagery is
@@ -63,30 +76,6 @@ pub fn ingest_pass(event: &SatellitePassEvent, overview_level: u8) -> PipelineRe
         valid_pixels: stats.valid_pixels,
         tif_path: tiff_path,
     }))
-}
-
-pub fn handle_pass(tx: mpsc::Sender<Event>, event: SatellitePassEvent, overview_level: u8) {
-    let ready_at = event.pass_end + chrono::Duration::hours(6);
-    let wait = (ready_at - Utc::now())
-        .to_std()
-        .unwrap_or(Duration::ZERO);
-
-    info!(
-        "Pass {} ends {}; waiting {:?} before ingestion",
-        event.satellite_id, event.pass_end, wait
-    );
-    std::thread::sleep(wait);
-
-    let result = ingest_pass(&event, overview_level)
-        .map_err(|e| e.to_string());
-
-    match &result {
-        Ok(Some(record)) => info!("Ingestion complete: {}", record.tif_path),
-        Ok(None) => info!("No imagery available, skipping"),
-        Err(e) => error!("Ingestion failed for {}: {e}", event.satellite_id),
-    }
-
-    tx.send(Event::PipelineFinished(result)).ok();
 }
 
 fn create_ndvi_output_dir(overview_level: u8) -> PipelineResult<(String, String)> {

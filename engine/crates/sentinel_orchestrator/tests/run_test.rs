@@ -2,19 +2,19 @@ use testcontainers_modules::{
     postgres::Postgres,
     testcontainers::{Container, runners::SyncRunner, ImageExt},
 };
+use sentinel_orchestrator::AzureConfig;
 
 fn start_postgis() -> (Container<Postgres>, String) {
     let container = Postgres::default()
         .with_name("postgis/postgis")
         .with_tag("15-3.3")
         .start()
-        .expect("PostGIS failed to start");
+        .expect("PostGIS container failed to start — is Docker running?");
 
     let port = container.get_host_port_ipv4(5432).unwrap();
     let conn_str = format!(
         "host=localhost port={port} user=postgres password=postgres dbname=postgres"
     );
-
     (container, conn_str)
 }
 
@@ -36,48 +36,66 @@ fn setup_schema(client: &mut postgres::Client) {
             tif_path TEXT NOT NULL,
             bbox GEOMETRY(POLYGON, 4326)
         );
-    ").unwrap();
+    ").expect("Schema migration failed");
 }
 
-fn set_pipeline_env(conn_str: &str) {
-    unsafe {
-        std::env::set_var("DATABASE_URL", conn_str);
-        std::env::set_var("SATELLITE_ID", "SENTINEL-2A");
-        std::env::set_var("MIN_LON", "-122.95");
-        std::env::set_var("MAX_LON", "-122.65");
-        std::env::set_var("MIN_LAT", "49.05");
-        std::env::set_var("MAX_LAT", "49.35");
-        std::env::set_var("OVERVIEW_LEVEL", "3");
-        std::env::set_var("LOOKBACK_DAYS", "2190");
-    }
-}
+fn run_pipeline_at_level(overview_level: u8) -> (f32, i32) {
+    let (_container, conn_str) = start_postgis();
+    let mut client = postgres::Client::connect(&conn_str, postgres::NoTls).unwrap();
+    setup_schema(&mut client);
 
-fn assert_ndvi_row(client: &mut postgres::Client) {
+    sentinel_orchestrator::run_with(AzureConfig::for_test(overview_level, conn_str.clone()))
+        .unwrap_or_else(|e| panic!("Pipeline failed at level {overview_level}: {e}"));
+
     let row = client
         .query_one("SELECT mean_ndvi, valid_pixels FROM ndvi_history", &[])
         .unwrap();
 
-    let mean: f32 = row.get(0);
-    let pixels: i32 = row.get(1);
-
-    assert!(mean > -1.0 && mean < 1.0, "NDVI out of range: {mean}");
-    assert!(pixels > 0, "Expected valid pixels");
-
-    println!("Mean NDVI: {mean:.3}");
-    println!("Valid pixels: {pixels}");
+    (row.get(0), row.get(1))
 }
 
 #[test]
 #[ignore]
-fn run_test() {
-    let (_container, conn_str) = start_postgis();
-    let mut client = postgres::Client::connect(&conn_str, postgres::NoTls).unwrap();
+fn pipeline_overview_level_1() {
+    let (mean, pixels) = run_pipeline_at_level(1);
+    assert!(mean > -1.0 && mean < 1.0, "NDVI out of range: {mean}");
+    assert!(pixels > 0, "Expected valid pixels at level 1");
+    println!("Level 1 — mean NDVI: {mean:.3}, valid pixels: {pixels}");
+}
 
-    setup_schema(&mut client);
-    set_pipeline_env(&conn_str);
+#[test]
+#[ignore]
+fn pipeline_overview_level_2() {
+    let (mean, pixels) = run_pipeline_at_level(2);
+    assert!(mean > -1.0 && mean < 1.0, "NDVI out of range: {mean}");
+    assert!(pixels > 0, "Expected valid pixels at level 2");
+    println!("Level 2 — mean NDVI: {mean:.3}, valid pixels: {pixels}");
+}
 
-    let result = sentinel_orchestrator::run();
-    assert!(result.is_ok(), "Pipeline failed: {:?}", result.err());
+#[test]
+#[ignore]
+fn pipeline_overview_level_3() {
+    let (mean, pixels) = run_pipeline_at_level(3);
+    assert!(mean > -1.0 && mean < 1.0, "NDVI out of range: {mean}");
+    assert!(pixels > 0, "Expected valid pixels at level 3");
+    println!("Level 3 — mean NDVI: {mean:.3}, valid pixels: {pixels}");
+}
 
-    assert_ndvi_row(&mut client);
+#[test]
+#[ignore]
+fn overview_levels_resolve_distinct_ifds() {
+    let results: Vec<(f32, i32)> = (1u8..=3)
+        .map(run_pipeline_at_level)
+        .collect();
+
+    assert!(
+        results[0].1 > results[1].1,
+        "Level 1 should have more pixels than level 2: {} vs {}",
+        results[0].1, results[1].1,
+    );
+    assert!(
+        results[1].1 > results[2].1,
+        "Level 2 should have more pixels than level 3: {} vs {}",
+        results[1].1, results[2].1,
+    );
 }

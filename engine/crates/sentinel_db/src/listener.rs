@@ -8,14 +8,14 @@ use crate::insert::insert_ndvi_result;
 /// [`Event::PipelineFinished`] results to the database.
 ///
 /// Returns when the sender is dropped (channel closed).
-pub fn listen(rx: Receiver<Event>) {
+pub fn listen(rx: Receiver<Event>, database_url: String) {
     thread::spawn(move || {
         info!("DB listener started");
 
         for event in rx {
             match event {
                 Event::PipelineFinished(Ok(Some(result))) => {
-                    if let Err(e) = insert_ndvi_result(&result) {
+                    if let Err(e) = insert_ndvi_result(&result, &database_url) {
                         error!("Failed to insert NDVI result after retries: {e}");
                     }
                 }

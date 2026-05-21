@@ -2672,6 +2672,7 @@ dependencies = [
  "dotenvy",
  "env_logger",
  "log",
+ "mpsc",
  "postgres",
  "sentinel_db",
  "sentinel_pipeline",

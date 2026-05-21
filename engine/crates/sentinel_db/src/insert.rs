@@ -8,15 +8,16 @@ use crate::error::{DbError, DbResult};
 const MAX_ATTEMPTS: u32 = 3;
 const RETRY_DELAY: Duration = Duration::from_secs(5);
 
-/// Insert a [`PipelineResult`] into `ndvi_history`.65
+/// Insert an [`NdviRecord`] into `ndvi_history`.
 ///
 /// Retries up to [`MAX_ATTEMPTS`] times with a [`RETRY_DELAY`] backoff
-/// before returning [`DbError::InsertFailed`].
-pub fn insert_ndvi_result(result: &NdviRecord) -> DbResult<()> {
+/// before returning the last error.
+pub fn insert_ndvi_result(result: &NdviRecord, database_url: &str) -> DbResult<()> {
+    let mut client = connect(database_url)?;
     let mut last_err = None;
 
     for attempt in 1..=MAX_ATTEMPTS {
-        match try_insert(result) {
+        match try_insert(result, &mut client) {
             Ok(()) => {
                 info!("Inserted NDVI record for {} at {}", result.satellite_id, result.captured_at);
                 return Ok(());
@@ -34,9 +35,7 @@ pub fn insert_ndvi_result(result: &NdviRecord) -> DbResult<()> {
     Err(last_err.unwrap())
 }
 
-fn try_insert(result: &NdviRecord) -> DbResult<()> {
-    let mut client = connect()?;
-
+fn try_insert(result: &NdviRecord, client: &mut postgres::Client) -> DbResult<()> {
     client.execute(
         r#"
         INSERT INTO ndvi_history (
@@ -62,7 +61,10 @@ fn try_insert(result: &NdviRecord) -> DbResult<()> {
             &(result.valid_pixels as i32),
             &result.tif_path,
         ],
-    ).map_err(DbError::Connection)?;
+    ).map_err(|e| DbError::InsertFailed {
+        attempts: MAX_ATTEMPTS,
+        source: e,
+    })?;
 
     Ok(())
 }
