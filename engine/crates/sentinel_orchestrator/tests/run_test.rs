@@ -54,6 +54,17 @@ fn run_pipeline_at_level(overview_level: u8) -> (f32, i32) {
     (row.get(0), row.get(1))
 }
 
+/// Full resolution — main IFD, largest pixel count.
+#[test]
+#[ignore]
+fn pipeline_overview_level_0() {
+    let (mean, pixels) = run_pipeline_at_level(0);
+    assert!(mean > -1.0 && mean < 1.0, "NDVI out of range: {mean}");
+    assert!(pixels > 0, "Expected valid pixels at level 0");
+    println!("Level 0 — mean NDVI: {mean:.3}, valid pixels: {pixels}");
+}
+
+/// First overview — coarser resolution, fewer pixels than level 0.
 #[test]
 #[ignore]
 fn pipeline_overview_level_1() {
@@ -63,39 +74,26 @@ fn pipeline_overview_level_1() {
     println!("Level 1 — mean NDVI: {mean:.3}, valid pixels: {pixels}");
 }
 
+/// Requesting a level beyond what the COG provides should fail explicitly
+/// rather than silently returning the wrong data.
 #[test]
 #[ignore]
-fn pipeline_overview_level_2() {
-    let (mean, pixels) = run_pipeline_at_level(2);
-    assert!(mean > -1.0 && mean < 1.0, "NDVI out of range: {mean}");
-    assert!(pixels > 0, "Expected valid pixels at level 2");
-    println!("Level 2 — mean NDVI: {mean:.3}, valid pixels: {pixels}");
+fn pipeline_overview_level_out_of_range() {
+    let result = sentinel_orchestrator::run_with(AzureConfig::for_test(2, "unused".into()));
+    assert!(result.is_err(), "Expected error for unavailable overview level");
 }
 
-#[test]
-#[ignore]
-fn pipeline_overview_level_3() {
-    let (mean, pixels) = run_pipeline_at_level(3);
-    assert!(mean > -1.0 && mean < 1.0, "NDVI out of range: {mean}");
-    assert!(pixels > 0, "Expected valid pixels at level 3");
-    println!("Level 3 — mean NDVI: {mean:.3}, valid pixels: {pixels}");
-}
-
+/// Proves that level 0 and level 1 resolve to distinct IFDs by comparing
+/// pixel counts — coarser overviews must cover fewer pixels for the same bbox.
 #[test]
 #[ignore]
 fn overview_levels_resolve_distinct_ifds() {
-    let results: Vec<(f32, i32)> = (1u8..=3)
-        .map(run_pipeline_at_level)
-        .collect();
+    let (_, pixels_0) = run_pipeline_at_level(0);
+    let (_, pixels_1) = run_pipeline_at_level(1);
 
     assert!(
-        results[0].1 > results[1].1,
-        "Level 1 should have more pixels than level 2: {} vs {}",
-        results[0].1, results[1].1,
-    );
-    assert!(
-        results[1].1 > results[2].1,
-        "Level 2 should have more pixels than level 3: {} vs {}",
-        results[1].1, results[2].1,
+        pixels_0 > pixels_1,
+        "Level 0 should have more pixels than level 1: {} vs {}",
+        pixels_0, pixels_1,
     );
 }

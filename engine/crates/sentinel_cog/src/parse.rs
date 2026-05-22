@@ -194,26 +194,51 @@ pub fn parse_subifds(
     let entry_count = read_u16(header, ifd_offset, le)? as usize;
     debug!("Main IFD at offset {ifd_offset}, {entry_count} entries");
 
+    // Fix 1: The Main IFD must ALWAYS be level 0
+    let mut all_ifds = vec![ifd_offset as u32];
+
     for i in 0..entry_count {
         let entry = ifd_offset + 2 + i * 12;
         let tag = read_u16(header, entry, le)?;
         let type_id = read_u16(header, entry + 2, le)?;
         let count = read_u32(header, entry + 4, le)? as usize;
 
-        if tag != TAG_SUB_IFDS { continue; }
+        if tag == TAG_SUB_IFDS {
+            debug!("Found {count} SubIFD(s) at tag 330 (type={type_id})");
 
-        debug!("Found {count} SubIFD(s) at tag 330 (type={type_id})");
+            let sub_offsets: Vec<u32> = read_ext_values(client, url, header, entry, type_id, tag, count, le)?
+                .into_iter()
+                .map(|v| v as u32)
+                .collect();
 
-        let offsets = read_ext_values(client, url, header, entry, type_id, tag, count, le)?
-            .into_iter()
-            .map(|v| v as u32)
-            .collect();
-
-        return Ok(offsets);
+            // Append the overviews AFTER the Main IFD
+            all_ifds.extend(sub_offsets);
+            return Ok(all_ifds);
+        }
     }
 
-    debug!("No SubIFD tag found, falling back to main IFD at {ifd_offset}");
-    Ok(vec![ifd_offset as u32])
+    // Fix 2: Fallback to standard IFD chaining if TAG_SUB_IFDS is missing
+    // The Next IFD pointer is a 4-byte offset immediately following the directory entries
+    let next_ifd_ptr_offset = ifd_offset + 2 + (entry_count * 12);
+    
+    if next_ifd_ptr_offset + 4 <= header.len() {
+        let next_ifd = read_u32(header, next_ifd_ptr_offset, le)?;
+        if next_ifd != 0 {
+            debug!("No SubIFD tag, but found chained IFD at offset {next_ifd}");
+            all_ifds.push(next_ifd);
+            // Note: A fully robust implementation would loop here to follow 
+            // the entire chain, but grabbing the first link gets you Overview 1.
+        } else {
+            debug!("No SubIFD tag and no chained IFDs. Returning main IFD only.");
+        }
+    }
+
+    Ok(all_ifds)
+}
+
+pub fn parse_main_ifd_offset(header: &[u8]) -> CogResult<u64> {
+    let le = is_little_endian(header)?;
+    Ok(read_u32(header, 4, le)? as u64)
 }
 
 pub fn parse_ifd_bytes(

@@ -28,7 +28,7 @@ pub mod parse;
 
 pub use decode::{Raster, NODATA};
 pub use error::{CogError, CogResult};
-pub use parse::{IfdInfo, GeoTransform, is_little_endian, parse_subifds, parse_ifd_bytes};
+pub use parse::{IfdInfo, GeoTransform, is_little_endian, parse_subifds, parse_ifd_bytes, parse_main_ifd_offset};
 
 use sentinel_types::BBox;
 
@@ -87,12 +87,35 @@ fn resolve_ifd(
     let le = is_little_endian(&header)?;
     let subifd_offsets = parse_subifds(client, url, &header)?;
 
+    let main_ifd_offset = parse::parse_main_ifd_offset(&header)?;
+    let main_bytes = fetch::fetch_ifd_block(client, url, main_ifd_offset)?;
+    let main_info = parse_ifd_bytes(client, url, &main_bytes, le)?;
+
     let ifd_offset = subifd_offsets
         .get(overview_level)
         .copied()
-        .unwrap_or_else(|| *subifd_offsets.last().unwrap());
+        .ok_or_else(|| CogError::InvalidHeader(
+            format!("overview level {overview_level} requested but only {} available", subifd_offsets.len())
+        ))?;
 
-    let ifd_bytes = fetch::fetch_ifd_block(client, url, ifd_offset)?;
-    let info = parse_ifd_bytes(client, url, &ifd_bytes, le)?;
+    if ifd_offset as u64 == main_ifd_offset {
+        return Ok((main_info, le));
+    }
+
+    let ifd_bytes = fetch::fetch_ifd_block(client, url, ifd_offset as u64)?;
+    let mut info = parse_ifd_bytes(client, url, &ifd_bytes, le)?;
+
+    if info.geo.is_none() {
+        if let Some(base_geo) = main_info.geo {
+            let scale = main_info.img_w as f64 / info.img_w as f64;
+            info.geo = Some(GeoTransform {
+                origin_x: base_geo.origin_x,
+                origin_y: base_geo.origin_y,
+                pixel_x: base_geo.pixel_x * scale,
+                pixel_y: base_geo.pixel_y * scale,
+            });
+        }
+    }
+
     Ok((info, le))
 }

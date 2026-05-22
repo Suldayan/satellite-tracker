@@ -1,7 +1,6 @@
 use chrono::Utc;
 use sentinel_types::SatellitePassEvent;
 use crate::config::AzureConfig;
-use std::sync::mpsc;
 
 /// Entry point for production — reads config from environment.
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {

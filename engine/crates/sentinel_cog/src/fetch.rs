@@ -42,7 +42,7 @@ pub fn fetch_range(
 pub fn fetch_ifd_block(
     client: &Client,
     url: &str,
-    offset: u32,
+    offset: u64,
 ) -> CogResult<Bytes> {
     fetch_range(client, url, offset as u64, offset as u64 + 4_095)
 }
