@@ -4,7 +4,7 @@ use crate::config::Config;
 
 /// Entry point for production — reads config from environment.
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
-    run_with(Config::from_env())
+    run_with(Config::from_env()?)
 }
 
 /// Runs the pipeline with an explicit config — used directly in tests

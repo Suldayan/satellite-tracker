@@ -1,46 +1,43 @@
+use serde::Deserialize;
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "UPPERCASE")] 
 pub struct Config {
-    pub database_url: String,
+    pub database_url: String, 
+
+    #[serde(default = "default_satellite")]
     pub satellite_id: String,
+
+    #[serde(default = "default_min_lon")]
     pub min_lon: f64,
+
+    #[serde(default = "default_max_lon")]
     pub max_lon: f64,
+
+    #[serde(default = "default_min_lat")]
     pub min_lat: f64,
+
+    #[serde(default = "default_max_lat")]
     pub max_lat: f64,
+
+    #[serde(default = "default_overview_level")]
     pub overview_level: u8,
+
+    #[serde(default = "default_lookback_days")]
     pub lookback_days: i64,
 }
 
+fn default_satellite() -> String { "SENTINEL-2A".into() }
+fn default_min_lon() -> f64 { -122.95 }
+fn default_max_lon() -> f64 { -122.65 }
+fn default_min_lat() -> f64 { 49.05 }
+fn default_max_lat() -> f64 { 49.35 }
+fn default_overview_level() -> u8 { 1 }
+fn default_lookback_days() -> i64 { 5 }
+
 impl Config {
-    pub fn from_env() -> Self {
-        Self {
-            database_url: std::env::var("DATABASE_URL")
-                .expect("DATABASE_URL must be set"),
-            satellite_id: std::env::var("SATELLITE_ID")
-                .unwrap_or_else(|_| "SENTINEL-2A".into()),
-            min_lon: std::env::var("MIN_LON")
-                .unwrap_or_else(|_| "-122.95".into())
-                .parse()
-                .expect("MIN_LON must be a valid f64"),
-            max_lon: std::env::var("MAX_LON")
-                .unwrap_or_else(|_| "-122.65".into())
-                .parse()
-                .expect("MAX_LON must be a valid f64"),
-            min_lat: std::env::var("MIN_LAT")
-                .unwrap_or_else(|_| "49.05".into())
-                .parse()
-                .expect("MIN_LAT must be a valid f64"),
-            max_lat: std::env::var("MAX_LAT")
-                .unwrap_or_else(|_| "49.35".into())
-                .parse()
-                .expect("MAX_LAT must be a valid f64"),
-            overview_level: std::env::var("OVERVIEW_LEVEL")
-                .unwrap_or_else(|_| "1".into())
-                .parse()
-                .expect("OVERVIEW_LEVEL must be a valid u8"),
-            lookback_days: std::env::var("LOOKBACK_DAYS")
-                .unwrap_or_else(|_| "5".into())
-                .parse()
-                .expect("LOOKBACK_DAYS must be a valid i64"),
-        }
+    pub fn from_env() -> Result<Self, envy::Error> {
+        envy::from_env::<Self>()
     }
 
     pub fn for_test(overview_level: u8, database_url: String) -> Self {

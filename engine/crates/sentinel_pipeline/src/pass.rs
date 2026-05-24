@@ -58,9 +58,9 @@ pub fn ingest_pass(event: &SatellitePassEvent, overview_level: u8) -> PipelineRe
         .ok_or(PipelineError::InvalidBBox("No valid pixels in output".into()))?;
 
     let (_, tiff_path) = create_ndvi_output_dir(overview_level)?;
-        write_f32_tiff(&ndvi, w, h, &tiff_path, &GeoRef::utm10n_10m())?;
+        write_f32_tiff(&ndvi, w, h, &tiff_path, &GeoRef::utm10n_for_overview(overview_level))?;
 
-    write_f32_tiff(&ndvi, w, h, &tiff_path, &GeoRef::utm10n_10m())?;
+    write_f32_tiff(&ndvi, w, h, &tiff_path, &GeoRef::utm10n_for_overview(overview_level))?;
     info!("Saved {tiff_path}");
 
     Ok(Some(NdviRecord {
