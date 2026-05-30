@@ -1,68 +1,66 @@
 # satellite-tracker
 
-A satellite tracking and remote sensing pipeline written in Rust. Predict the next time any satellite passes over your location, then automatically fetch and process Sentinel-2 imagery when it does — producing NDVI vegetation maps without downloading full 200 MB band files.
+A satellite remote sensing pipeline written in Rust. Automatically fetches Sentinel-2 imagery when a satellite passes over a defined region, computes NDVI vegetation indices, and persists time-series statistics to PostgreSQL/PostGIS — without downloading full 200 MB band files.
 
-![NDVI output — Surrey, BC](docs/surrey_ndvi.png)
+**Overview 0 — 10m resolution (23.9 MB, 88% reduction)**
+![NDVI output — Overview 0, 10m](docs/overview_0.png)
+
+**Overview 1 — 20m resolution (9.82 MB, 95% reduction)**
+![NDVI output — Overview 1, 20m](docs/overview_1.png)
 
 ---
 
 ## What it does
 
-The project started as a WASM-powered satellite tracker — enter your coordinates, get the next visible pass. It evolved into a full remote sensing pipeline when I wanted to do something useful with the imagery Sentinel-2 captures on those passes.
+Sentinel-2 satellites capture multispectral imagery of the Earth every 5 days. Each band file is ~200 MB. This pipeline streams only the tiles covering your area of interest via HTTP range requests, computes NDVI, writes a georeferenced GeoTIFF, and stores summary statistics in a PostGIS database for time-series analysis.
 
-The two halves are:
-
-**Satellite tracking:** Given a TLE (orbital elements) and an observer location, predict every visible pass over the next 24 hours. Runs in the browser via WebAssembly or natively as part of the ingestion pipeline.
-
-**NDVI pipeline:** When a pass occurs, automatically query Microsoft Planetary Computer for the corresponding Sentinel-2 scene, stream only the tiles covering your area of interest via HTTP range requests, compute NDVI, and write a georeferenced GeoTIFF. A full Sentinel-2 band is ~200 MB; this pipeline fetches ~2–5 MB for a city-scale bbox at full 10 m resolution.
+**The result:** 88% less data transferred at full 10m resolution, 95% less at 20m — without sacrificing spatial coverage of the target region.
 
 ---
 
 ## Architecture
 
 ```
-satellite_predictor    ← orbital mechanics, SGP4 propagation, WASM + native
-sentinel_types         ← shared types (BBox, SatellitePassEvent)
+sentinel_types         ← shared data types (BBox, SatellitePassEvent, NdviRecord)
 sentinel_cog           ← COG tile fetching via HTTP range requests
-sentinel_ndvi          ← NDVI compute, difference maps, GeoTIFF output
-sentinel_orchestrator  ← TLE refresh, pass prediction loop, event emission
-sentinel_pipeline      ← STAC query, band fetch, NDVI write
-sentinel_runner        ← binary, wires everything together
+sentinel_ndvi          ← NDVI compute, stats, GeoTIFF output
+sentinel_pipeline      ← STAC query, band fetch, end-to-end ingest
+sentinel_db            ← PostgreSQL/PostGIS insert with retry logic
+sentinel_orchestrator  ← entry point, loads config, wires pipeline + db
 ```
 
 ```
-TLE from Celestrak
+Config (env vars)
       ↓
-sentinel_orchestrator  (predicts passes, emits SatellitePassEvent)
-      ↓  mpsc channel
-sentinel_pipeline      (queries STAC → fetches COG tiles → computes NDVI)
-      ↓
-Float32 GeoTIFF on disk
+sentinel_orchestrator
+      ↓ SatellitePassEvent
+sentinel_pipeline  →  STAC query → COG fetch → NDVI compute → GeoTIFF
+      ↓ NdviRecord
+sentinel_db        →  INSERT INTO ndvi_history (PostGIS)
 ```
 
 ---
 
 ## Stack
 
-- **Rust** — core pipeline, orbital mechanics, COG parsing
-- **WebAssembly** — satellite tracker runs in the browser via `wasm-bindgen`
-- **HTML / CSS / JS** — frontend tracker UI
+- **Rust** — entire pipeline, zero runtime overhead
 - **Sentinel-2 L2A** — imagery source via [Microsoft Planetary Computer](https://planetarycomputer.microsoft.com/)
+- **PostgreSQL + PostGIS** — time-series vegetation statistics
+- **Docker** — multi-stage Alpine build, production-ready container
 - **QGIS** — visualisation and validation
 
 ---
 
-## Crates
+## Published Crates
 
 ### `sentinel_cog`
-
-Streams Cloud Optimized GeoTIFF tiles via HTTP range requests. Parses the TIFF IFD at the byte level to locate tile offsets, reads the embedded geotransform (tags 33550 + 33922), and filters to only the tiles that intersect a given bounding box before fetching.
+Streams Cloud Optimized GeoTIFF tiles via HTTP range requests. Parses the TIFF IFD at the byte level, reads the embedded geotransform (tags 33550 + 33922), and filters to only the tiles intersecting a bounding box before fetching.
 
 ```rust
-// ~500 KB at overview resolution
+// ~500 KB at overview level 3
 let raster = fetch_overview(&client, &url, 3)?;
 
-// ~2–5 MB at full 10 m resolution, Surrey only
+// 23.9 MB at full 10m resolution, Surrey bbox only (vs ~200 MB full band)
 let raster = fetch_overview_bbox(&client, &url, 0, &BBox::surrey_bc())?;
 ```
 
@@ -71,11 +69,11 @@ let raster = fetch_overview_bbox(&client, &url, 0, &BBox::surrey_bc())?;
 ---
 
 ### `sentinel_ndvi`
-
 Pure-compute NDVI processing. No HTTP, no I/O beyond writing the result.
 
 ```rust
 let (ndvi, w, h) = compute_ndvi(&b04, &b08)?;
+let stats = compute_stats(&ndvi)?;
 write_f32_tiff(&ndvi, w, h, "ndvi.tif", &GeoRef::utm10n_10m())?;
 
 // Change detection between two dates
@@ -87,47 +85,123 @@ println!("Mean change: {:.3}", diff.mean_change);
 
 ---
 
-## NDVI output
+## NDVI Output
 
-NDVI (Normalized Difference Vegetation Index) measures vegetation density:
+NDVI measures vegetation density using near-infrared and red reflectance:
 
 ```
 NDVI = (NIR − Red) / (NIR + Red)
 ```
 
-Output is a Float32 GeoTIFF. Load in QGIS with *Singleband pseudocolor* + *RdYlGn* colormap at 2–98% percentile stretch.
+Output is a Float32 GeoTIFF with DEFLATE compression. Load in QGIS with *Singleband pseudocolor* + *RdYlGn* colormap at 2–98% percentile stretch.
 
-| Color | NDVI | Meaning |
-|-------|------|---------|
-| Deep green | > 0.6 | Dense, healthy vegetation |
-| Yellow-green | 0.2 – 0.4 | Moderate vegetation |
-| Orange | ~0 | Bare soil, urban |
-| Red | < 0 | Water, shadow |
+| Overview | Dimensions | File size | vs full band |
+|----------|-----------|-----------|--------------|
+| 0 (10m) | 3584 × 5120 | 23.9 MB | 88% reduction |
+| 1 (20m) | 2048 × 3072 | 9.82 MB | 95% reduction |
+| Full band | 10980 × 10980 | ~200 MB | baseline |
 
 ---
 
 ## Running locally
 
 ```bash
-git clone https://github.com/your-username/satellite-tracker
+git clone https://github.com/Suldayan/satellite-tracker
 cd satellite-tracker/engine
-cargo build --workspace
-cargo run --bin sentinel_runner
 ```
 
-Set `RUST_LOG=info` to see pipeline output.
+Create a `.env` file:
 
-To run the ignored integration tests (requires network):
+```env
+DATABASE_URL=host=localhost user=postgres password=secret dbname=gisdb
+SATELLITE_ID=SENTINEL-2A
+MIN_LON=-122.95
+MAX_LON=-122.65
+MIN_LAT=49.05
+MAX_LAT=49.35
+OVERVIEW_LEVEL=1
+LOOKBACK_DAYS=5
+RUST_LOG=info
+```
+
+Run the pipeline:
+
+```bash
+cargo run --bin sentinel_orchestrator
+```
+
+Or run via Docker:
+
+```bash
+docker build -t sentinel-orchestrator .
+docker run --env-file .env sentinel-orchestrator
+```
+
+---
+
+## Running tests
+
+Unit and integration tests:
+
+```bash
+cargo test --workspace
+```
+
+End-to-end ignored tests (requires network):
 
 ```bash
 cargo test --workspace -- --ignored --nocapture
 ```
 
+Database tests (requires Docker):
+
+```bash
+cargo test --package sentinel_db
+```
+
+---
+
+## PostGIS schema
+
+```sql
+CREATE EXTENSION IF NOT EXISTS postgis;
+
+CREATE TABLE ndvi_history (
+    id           SERIAL PRIMARY KEY,
+    captured_at  TIMESTAMPTZ NOT NULL,
+    satellite_id TEXT NOT NULL,
+    min_lon      DOUBLE PRECISION NOT NULL,
+    max_lon      DOUBLE PRECISION NOT NULL,
+    min_lat      DOUBLE PRECISION NOT NULL,
+    max_lat      DOUBLE PRECISION NOT NULL,
+    mean_ndvi    REAL NOT NULL,
+    max_ndvi     REAL NOT NULL,
+    min_ndvi     REAL NOT NULL,
+    valid_pixels INTEGER NOT NULL,
+    tif_path     TEXT NOT NULL,
+    bbox         GEOMETRY(POLYGON, 4326)
+);
+
+CREATE INDEX ndvi_history_bbox_idx ON ndvi_history USING GIST (bbox);
+CREATE INDEX ndvi_history_time_idx ON ndvi_history (captured_at);
+```
+
+Example time-series query:
+
+```sql
+SELECT DATE_TRUNC('month', captured_at), AVG(mean_ndvi)
+FROM ndvi_history
+GROUP BY 1
+ORDER BY 1;
+```
+
+---
+
 ## Planned
 
-- SCL (Scene Classification Layer) masking to remove cloud and shadow pixels before computing NDVI
-- PostGIS time series storage for multi-date change detection queries
-- Azure Functions deployment for fully automated ingestion
+- SCL (Scene Classification Layer) masking to filter cloud and shadow pixels
+- Azure Container Apps deployment for automated 5-day ingestion cycle
+- Multi-date difference map queries via PostGIS
 
 ---
 
