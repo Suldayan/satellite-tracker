@@ -1,8 +1,12 @@
 # satellite-tracker
 
-A satellite remote sensing pipeline written in Rust. Automatically fetches Sentinel-2 imagery when a satellite passes over a defined region, computes NDVI vegetation indices, and persists time-series statistics to PostgreSQL/PostGIS without downloading full 200 MB band files.
+A satellite remote sensing pipeline written in Rust. Automatically fetches Sentinel-2 imagery when a satellite passes over a defined region, computes NDVI vegetation indices, and persists time-series statistics to PostgreSQL/PostGIS — without downloading full 200 MB band files.
 
-![NDVI output — Surrey, BC](docs/surrey_ndvi.png)
+**Overview 0 — 10m resolution (23.9 MB, 88% reduction)**
+![NDVI output — Overview 0, 10m](docs/overview_0.png)
+
+**Overview 1 — 20m resolution (9.82 MB, 95% reduction)**
+![NDVI output — Overview 1, 20m](docs/overview_1.png)
 
 ---
 
@@ -190,6 +194,15 @@ FROM ndvi_history
 GROUP BY 1
 ORDER BY 1;
 ```
+
+---
+
+## Planned
+
+- SCL (Scene Classification Layer) masking to filter cloud and shadow pixels
+- Azure Container Apps deployment for automated 5-day ingestion cycle
+- Multi-date difference map queries via PostGIS
+
 ---
 
 ## License
