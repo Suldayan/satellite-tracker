@@ -1,6 +1,6 @@
 [package]
 name = "sentinel_cog"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 description = "Stream Sentinel-2 Cloud Optimized GeoTIFF tiles via HTTP range requests — no full-band download required"
 repository = "https://github.com/your-username/satellite-tracker"

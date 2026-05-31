@@ -1,6 +1,6 @@
 [package]
 name = "sentinel_ndvi"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 description = "NDVI computation and GeoTIFF output for Sentinel-2 rasters"
 repository = "https://github.com/your-username/satellite-tracker"
