@@ -1,6 +1,6 @@
-# satellite-tracker
+# sentinel-2-pipeline
 
-A satellite remote sensing pipeline written in Rust. Automatically fetches Sentinel-2 imagery when a satellite passes over a defined region, computes NDVI vegetation indices, and persists time-series statistics to PostgreSQL/PostGIS — without downloading full 200 MB band files.
+A high-performance Rust pipeline designed to ingest and process Sentinel-2 satellite imagery. By leveraging HTTP range requests, the system extracts only the required spectral bands directly from cloud storage, computing NDVI indices and persisting spatial time-series statistics to PostGIS without the overhead of full 200MB scene downloads.
 
 **Overview 0 — 10m resolution (23.9 MB, 88% reduction)**
 ![NDVI output — Overview 0, 10m](docs/overview_0.png)
