@@ -1,6 +1,6 @@
 # sentinel_ndvi
 
-Pure-compute NDVI processing for Sentinel-2 rasters. Takes raw band data, returns NDVI values and GeoTIFF output — no HTTP, no I/O beyond writing the result.
+Pure-compute NDVI processing for Sentinel-2 rasters. Takes raw band data, returns NDVI values, summary statistics, and GeoTIFF output — no HTTP, no scheduling, no I/O beyond writing the result.
 
 ## Install
 
@@ -12,18 +12,22 @@ sentinel_ndvi = "0.1"
 ## Quick start
 
 ```rust
-use sentinel_ndvi::{compute_ndvi, write_f32_tiff, GeoRef, NdviError};
+use sentinel_ndvi::{compute_ndvi, compute_stats, write_f32_tiff, GeoRef};
 
 // b04 and b08 are Raster values from sentinel_cog
 let (ndvi, width, height) = compute_ndvi(&b04, &b08)?;
+let stats = compute_stats(&ndvi).expect("No valid pixels");
 
-// Write a Float32 GeoTIFF — apply colour ramp in QGIS
+println!("Mean NDVI: {:.3}", stats.mean_ndvi);
+println!("Valid pixels: {}", stats.valid_pixels);
+
+// Write a Float32 GeoTIFF with DEFLATE compression
 write_f32_tiff(&ndvi, width, height, "ndvi.tif", &GeoRef::utm10n_10m())?;
 ```
 
 ## NDVI
 
-NDVI (Normalized Difference Vegetation Index) measures vegetation density using near-infrared and red reflectance:
+NDVI (Normalized Difference Vegetation Index) measures vegetation density:
 
 ```
 NDVI = (NIR - Red) / (NIR + Red)
@@ -37,34 +41,33 @@ NDVI = (NIR - Red) / (NIR + Red)
 | 0.3 – 0.6 | Moderate vegetation |
 | > 0.6 | Dense, healthy canopy |
 
-## Output formats
+Pixels where either input band is `NODATA` (`u16::MAX` from `sentinel_cog`) are written as `f32::NAN` and excluded from all statistics. QGIS renders NAN pixels as transparent in Float32 GeoTIFFs.
 
-**Float32 GeoTIFF** — recommended. Stores raw NDVI values for maximum precision. Load in QGIS with *Singleband pseudocolor* + *RdYlGn* ramp at 2–98% percentile stretch for best results.
+## Summary statistics
 
 ```rust
+let stats = compute_stats(&ndvi).unwrap();
+
+println!("{:.3}", stats.mean_ndvi);    // mean of valid pixels
+println!("{:.3}", stats.max_ndvi);     // maximum valid value
+println!("{:.3}", stats.min_ndvi);     // minimum valid value
+println!("{}", stats.valid_pixels);    // count of non-NAN pixels
+```
+
+## GeoTIFF output
+
+Output is a single-band Float32 GeoTIFF with DEFLATE compression. Load in QGIS with *Singleband pseudocolor* + *RdYlGn* colormap at 2–98% percentile stretch for best results.
+
+```rust
+// Built-in: UTM Zone 10N, 10m pixels — Surrey/BC Sentinel-2 tiles
 write_f32_tiff(&ndvi, w, h, "ndvi.tif", &GeoRef::utm10n_10m())?;
-```
-
-**RGB GeoTIFF** — applies a built-in 5-stop colour ramp (blue → brown → yellow → lime → dark green). Useful for quick previews without QGIS.
-
-```rust
-write_rgb_geotiff(&ndvi, w, h, "ndvi.tif", &GeoRef::utm10n_10m())?;
-```
-
-## Georeferencing
-
-`GeoRef` controls the `.tfw` world file and `.prj` CRS sidecar written alongside the TIFF:
-
-```rust
-// Built-in: UTM Zone 10N, 10 m pixels — covers Surrey/BC Sentinel-2 tiles
-let georef = GeoRef::utm10n_10m();
 
 // Custom georeferencing for any tile
 let georef = GeoRef {
-    pixel_size_x:  10.0,
+    pixel_size_x: 10.0,
     pixel_size_y: -10.0,
-    origin_x:      499_980.0,
-    origin_y:    5_500_020.0,
+    origin_x: 499_980.0,
+    origin_y: 5_500_020.0,
     prj_wkt: "…",
 };
 ```
@@ -76,10 +79,13 @@ use sentinel_ndvi::{calc_difference_map, DifferenceMap};
 
 let diff: DifferenceMap = calc_difference_map(&past_ndvi, &present_ndvi)?;
 
-println!("Mean change:  {:.3}", diff.mean_change);
-println!("Max decline:  {:.3}", diff.max_decline);
-println!("Max growth:   {:.3}", diff.max_growth);
+println!("Mean change: {:.3}", diff.mean_change);
+println!("Max decline: {:.3}", diff.max_decline);
+println!("Max growth: {:.3}", diff.max_growth);
+println!("Valid pixels: {}", diff.valid_pixels);
 ```
+
+NAN pixels are skipped in difference map calculations.
 
 ## Error handling
 
